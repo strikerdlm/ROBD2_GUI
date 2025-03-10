@@ -62,4 +62,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clear error messages
 - Tooltips for better user guidance
 
-[1.0.0]: https://github.com/strikerdlm/ROBD2_GUI/releases/tag/v1.0.0 
+## [1.0.1] - 2024-03-10
+
+### Added
+- Comprehensive training scripts for both fixed-wing and rotary-wing aircraft
+- Language support for Spanish and English in training scripts
+- Night vision training procedures for fixed-wing aircraft
+- Detailed setup instructions and flight commands in training scripts
+- Emergency procedures and safety reminders
+- Improved script organization with separate frames for each aircraft type
+- Clear instructions for script usage and navigation
+
+### Enhanced
+- Training tab interface with better organization
+- Script viewer window with improved readability
+- User interface for script selection and display
+
+[1.0.0]: https://github.com/strikerdlm/ROBD2_GUI/releases/tag/v1.0.0
+[1.0.1]: https://github.com/strikerdlm/ROBD2_GUI/compare/v1.0.0...v1.0.1 
