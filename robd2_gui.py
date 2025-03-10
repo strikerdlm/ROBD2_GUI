@@ -463,7 +463,7 @@ class ROBD2GUI:
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="Documentation", command=self.show_documentation)
-        help_menu.add_command(label="About", command=lambda: self.show_about())
+        help_menu.add_command(label="About", command=self.show_about)
         
         # Initialize variables
         self.serial_port = None
