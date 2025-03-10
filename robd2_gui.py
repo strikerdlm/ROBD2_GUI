@@ -463,6 +463,7 @@ class ROBD2GUI:
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="Documentation", command=self.show_documentation)
+        help_menu.add_command(label="About", command=lambda: self.show_about())
         
         # Initialize variables
         self.serial_port = None
@@ -489,7 +490,6 @@ class ROBD2GUI:
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
         # Create tabs in specified order
-        self.create_about_tab()  # Create About tab first
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
@@ -498,9 +498,6 @@ class ROBD2GUI:
         self.create_diagnostics_tab()
         self.create_programming_tab()
         self.create_logging_tab()
-        
-        # Add About menu command after tabs are created
-        help_menu.add_command(label="About", command=lambda: self.notebook.select(self.notebook.tabs().index("About")))
         
         # Add keyboard shortcuts
         self.root.bind('<Control-r>', lambda e: self.refresh_ports())
@@ -519,6 +516,163 @@ class ROBD2GUI:
         
         # Start plot updates
         self.root.after(1000, self.update_plots)
+
+    def show_about(self):
+        """Show the About window"""
+        about_window = tk.Toplevel(self.root)
+        about_window.title("About ROBD2 Diagnostic Interface")
+        about_window.geometry("800x600")
+        
+        # Create main container
+        main_frame = ModernFrame(about_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
+        
+        # Title with custom styling
+        title_frame = ttk.Frame(main_frame)
+        title_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        title_label = ttk.Label(
+            title_frame,
+            text="ROBD2 Diagnostic Interface",
+            font=('Helvetica', 24, 'bold')
+        )
+        title_label.pack()
+        
+        subtitle_label = ttk.Label(
+            title_frame,
+            text="A Comprehensive Tool for ROBD2 Device Management",
+            font=('Helvetica', 12)
+        )
+        subtitle_label.pack(pady=(5, 0))
+        
+        # Version with custom styling
+        version_frame = ttk.Frame(main_frame)
+        version_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        version_label = ttk.Label(
+            version_frame,
+            text="Version 1.0.0",
+            font=('Helvetica', 14, 'bold')
+        )
+        version_label.pack()
+        
+        # Description with custom styling
+        description_frame = ModernLabelFrame(main_frame, text="Overview", padding=15)
+        description_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        description_text = """
+The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
+
+This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
+"""
+        description_label = ttk.Label(
+            description_frame,
+            text=description_text,
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
+        )
+        description_label.pack()
+        
+        # Features with custom styling
+        features_frame = ModernLabelFrame(main_frame, text="Key Features", padding=15)
+        features_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        features_text = """
+• Real-time data visualization with customizable time scales
+• Comprehensive data logging and export capabilities
+• Device calibration tools
+• Performance monitoring
+• Diagnostic command interface
+• Modern, intuitive user interface
+• Automatic data validation and range checking
+• CSV data export with timestamps
+"""
+        features_label = ttk.Label(
+            features_frame,
+            text=features_text,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        features_label.pack()
+        
+        # Requirements with custom styling
+        requirements_frame = ModernLabelFrame(main_frame, text="System Requirements", padding=15)
+        requirements_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        requirements_text = """
+• Python 3.8 or higher
+• Windows 10 or higher
+• Required Python packages:
+  - pyserial
+  - rich
+  - matplotlib
+  - numpy
+"""
+        requirements_label = ttk.Label(
+            requirements_frame,
+            text=requirements_text,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        requirements_label.pack()
+        
+        # Author information with custom styling
+        author_frame = ModernLabelFrame(main_frame, text="Author", padding=15)
+        author_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        author_text = """
+Diego Malpica MD
+Aerospace Medicine Specialist
+Aerospace Physiology Instructor
+Aerospace Scientific Department
+Aerospace Medicine Directorate
+Colombian Aerospace Force
+
+Initial work - [strikerdlm](https://github.com/strikerdlm)
+
+Copyright © 2025 Diego Malpica MD. All rights reserved.
+
+License: MIT License
+Repository: https://github.com/strikerdlm/ROBD2_GUI
+For contributing please read the CONTRIBUTING.md file in the repository.
+"""
+        author_label = ttk.Label(
+            author_frame,
+            text=author_text,
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
+        )
+        author_label.pack()
+        
+        # Disclaimer with custom styling
+        disclaimer_frame = ModernLabelFrame(main_frame, text="Disclaimer", padding=15)
+        disclaimer_frame.pack(fill=tk.X)
+        
+        disclaimer_text = """
+This software is provided "as is" without any warranties, express or implied. The authors and developers are not responsible for any damages or injuries that may occur from the use of this software.
+
+This software is not intended for clinical use or any other settings without proper medical supervision.
+"""
+        disclaimer_label = ttk.Label(
+            disclaimer_frame,
+            text=disclaimer_text,
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
+        )
+        disclaimer_label.pack()
+        
+        # Center window on screen
+        about_window.update_idletasks()
+        width = about_window.winfo_width()
+        height = about_window.winfo_height()
+        x = (about_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (about_window.winfo_screenheight() // 2) - (height // 2)
+        about_window.geometry(f'{width}x{height}+{x}+{y}')
 
     def show_documentation(self):
         """Show the documentation window"""
@@ -655,269 +809,6 @@ For more information, please refer to the ROBD2 Technical Manual.
         x = (doc_window.winfo_screenwidth() // 2) - (width // 2)
         y = (doc_window.winfo_screenheight() // 2) - (height // 2)
         doc_window.geometry(f'{width}x{height}+{x}+{y}')
-
-    def create_about_tab(self):
-        """Create the About tab with project information"""
-        about_frame = ModernFrame(self.notebook)
-        self.notebook.add(about_frame, text="About")
-        
-        # Create main content frame with padding
-        content_frame = ModernFrame(about_frame)
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
-        
-        # Title with custom styling
-        title_frame = ttk.Frame(content_frame)
-        title_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        title_label = ttk.Label(
-            title_frame,
-            text="ROBD2 Diagnostic Interface",
-            font=('Helvetica', 24, 'bold')
-        )
-        title_label.pack()
-        
-        subtitle_label = ttk.Label(
-            title_frame,
-            text="A Comprehensive Tool for ROBD2 Device Management",
-            font=('Helvetica', 12)
-        )
-        subtitle_label.pack(pady=(5, 0))
-        
-        # Version with custom styling
-        version_frame = ttk.Frame(content_frame)
-        version_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        version_label = ttk.Label(
-            version_frame,
-            text="Version 1.0.0",
-            font=('Helvetica', 14, 'bold')
-        )
-        version_label.pack()
-        
-        # Description with custom styling
-        description_frame = ModernLabelFrame(content_frame, text="Overview", padding=15)
-        description_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        description_text = """
-The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
-
-This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
-"""
-        description_label = ttk.Label(
-            description_frame,
-            text=description_text,
-            wraplength=700,
-            justify=tk.CENTER,
-            font=('Helvetica', 11)
-        )
-        description_label.pack()
-        
-        # Features with custom styling
-        features_frame = ModernLabelFrame(content_frame, text="Key Features", padding=15)
-        features_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        features_text = """
-• Real-time data visualization with customizable time scales
-• Comprehensive data logging and export capabilities
-• Device calibration tools
-• Performance monitoring
-• Diagnostic command interface
-• Modern, intuitive user interface
-• Automatic data validation and range checking
-• CSV data export with timestamps
-"""
-        features_label = ttk.Label(
-            features_frame,
-            text=features_text,
-            wraplength=700,
-            justify=tk.LEFT,
-            font=('Helvetica', 11)
-        )
-        features_label.pack()
-        
-        # Requirements with custom styling
-        requirements_frame = ModernLabelFrame(content_frame, text="System Requirements", padding=15)
-        requirements_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        requirements_text = """
-• Python 3.8 or higher
-• Windows 10 or higher
-• Required Python packages:
-  - pyserial
-  - rich
-  - matplotlib
-  - numpy
-"""
-        requirements_label = ttk.Label(
-            requirements_frame,
-            text=requirements_text,
-            wraplength=700,
-            justify=tk.LEFT,
-            font=('Helvetica', 11)
-        )
-        requirements_label.pack()
-        
-        # Author information with custom styling
-        author_frame = ModernLabelFrame(content_frame, text="Author", padding=15)
-        author_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        author_text = """
-Diego Malpica MD
-Aerospace Medicine
-Aerospace Physiology Instructor
-Aerospace Scientific Department
-Aerospace Medicine Directorate
-Colombian Aerospace Force
-
-Initial work - [strikerdlm](https://github.com/strikerdlm)
-
-Copyright © 2025 Diego Malpica MD. All rights reserved.
-"""
-        author_label = ttk.Label(
-            author_frame,
-            text=author_text,
-            wraplength=700,
-            justify=tk.CENTER,
-            font=('Helvetica', 11)
-        )
-        author_label.pack()
-        
-        # Disclaimer with custom styling
-        disclaimer_frame = ModernLabelFrame(content_frame, text="Disclaimer", padding=15)
-        disclaimer_frame.pack(fill=tk.X)
-        
-        disclaimer_text = """
-This software is provided "as is" without any warranties, express or implied. The authors and developers are not responsible for any damages or injuries that may occur from the use of this software.
-
-This software is not intended for clinical use or any other settings without proper medical supervision.
-"""
-        disclaimer_label = ttk.Label(
-            disclaimer_frame,
-            text=disclaimer_text,
-            wraplength=700,
-            justify=tk.CENTER,
-            font=('Helvetica', 11)
-        )
-        disclaimer_label.pack()
-
-    def create_dashboard_tab(self):
-        """Create the dashboard tab with real-time plots"""
-        dashboard_frame = ModernFrame(self.notebook)
-        self.notebook.add(dashboard_frame, text="Dashboard")
-        
-        # Create top frame for controls
-        top_frame = ModernFrame(dashboard_frame)
-        top_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        # Add export button
-        self.export_btn = ModernButton(
-            top_frame,
-            text="Export Data",
-            command=self.export_data,
-            state=tk.DISABLED
-        )
-        self.export_btn.pack(side=tk.RIGHT, padx=5)
-        
-        # Add time unit selector
-        time_frame = ttk.Frame(top_frame)
-        time_frame.pack(side=tk.LEFT, padx=5)
-        ttk.Label(time_frame, text="Time Unit:").pack(side=tk.LEFT)
-        self.time_unit_var = tk.StringVar(value="seconds")
-        time_combo = ttk.Combobox(
-            time_frame,
-            textvariable=self.time_unit_var,
-            values=["seconds", "minutes"],
-            state="readonly",
-            width=10
-        )
-        time_combo.pack(side=tk.LEFT, padx=5)
-        
-        # Create left and right frames for plots
-        left_frame = ttk.Frame(dashboard_frame)
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        right_frame = ttk.Frame(dashboard_frame)
-        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        # Create plots
-        self.create_plot(left_frame, "Altitude", 'altitude', 'Altitude (ft)')
-        self.create_plot(left_frame, "O2 Concentration", 'o2_conc', 'O2 Concentration (%)')
-        self.create_plot(left_frame, "Breathing Loop Pressure", 'blp', 'BLP (mmHg)')
-        
-        self.create_plot(right_frame, "SpO2", 'spo2', 'SpO2 (%)')
-        self.create_plot(right_frame, "Pulse Rate", 'pulse', 'Pulse Rate (bpm)')
-        self.create_plot(right_frame, "O2 Sensor Voltage", 'o2_voltage', 'Voltage (V)')
-        
-        # Create statistics frame
-        stats_frame = ModernLabelFrame(dashboard_frame, text="Statistics", padding=10)
-        stats_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.stats_labels = {}
-        row = 0
-        for metric in ['altitude', 'o2_conc', 'blp', 'spo2', 'pulse', 'o2_voltage']:
-            ttk.Label(stats_frame, text=metric.replace('_', ' ').title()).grid(row=row, column=0, padx=5, pady=2)
-            self.stats_labels[metric] = ttk.Label(stats_frame, text="--")
-            self.stats_labels[metric].grid(row=row, column=1, padx=5, pady=2)
-            row += 1
-
-    def create_plot(self, parent, title, metric, ylabel):
-        """Create a matplotlib plot widget"""
-        frame = ModernLabelFrame(parent, text=title, padding=5)
-        frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        # Create figure and canvas
-        fig = Figure(figsize=(6, 2), dpi=100)
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Create subplot
-        ax = fig.add_subplot(111)
-        line, = ax.plot([], [], '-')
-        
-        # Configure plot
-        ax.set_title(title)
-        ax.set_ylabel(ylabel)
-        ax.grid(True)
-        
-        # Store plot objects
-        if not hasattr(self, 'plots'):
-            self.plots = {}
-        self.plots[metric] = {
-            'figure': fig,
-            'canvas': canvas,
-            'ax': ax,
-            'line': line
-        }
-
-    def update_plots(self):
-        """Update all plots with new data"""
-        if self.plotting_active:
-            time_unit = self.time_unit_var.get()
-            for metric, plot in self.plots.items():
-                timestamps, values = self.data_store.get_data(metric)
-                if timestamps and values:
-                    # Convert time units if needed
-                    if time_unit == "minutes":
-                        timestamps = [t/60 for t in timestamps]
-                        xlabel = "Time (minutes)"
-                    else:
-                        xlabel = "Time (seconds)"
-                    
-                    plot['line'].set_data(timestamps, values)
-                    plot['ax'].relim()
-                    plot['ax'].autoscale_view()
-                    plot['ax'].set_xlabel(xlabel)
-                    plot['canvas'].draw()
-                    
-            # Update statistics
-            for metric, label in self.stats_labels.items():
-                timestamps, values = self.data_store.get_data(metric)
-                if values:
-                    stats = f"Min: {min(values):.1f} | Max: {max(values):.1f} | Avg: {sum(values)/len(values):.1f}"
-                    label.configure(text=stats)
-        
-        # Schedule next update
-        self.root.after(1000, self.update_plots)
 
     def create_connection_tab(self):
         """Create the connection tab"""
@@ -1549,6 +1440,144 @@ The student should observe the difference in colors during hypoxia and when 100%
         
         self.log_text = tk.Text(log_frame, height=20, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+    def create_dashboard_tab(self):
+        """Create the dashboard tab with real-time plots"""
+        dashboard_frame = ModernFrame(self.notebook)
+        self.notebook.add(dashboard_frame, text="Dashboard")
+        
+        # Create main container with padding
+        main_container = ModernFrame(dashboard_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Create plots frame
+        plots_frame = ModernLabelFrame(main_container, text="Real-time Data", padding=15)
+        plots_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create figure with subplots
+        self.fig = Figure(figsize=(10, 8))
+        self.fig.subplots_adjust(hspace=0.4)
+        
+        # Create subplots
+        self.altitude_ax = self.fig.add_subplot(311)
+        self.o2_ax = self.fig.add_subplot(312)
+        self.vitals_ax = self.fig.add_subplot(313)
+        
+        # Initialize plot lines
+        self.altitude_line, = self.altitude_ax.plot([], [], 'b-', label='Altitude')
+        self.o2_line, = self.o2_ax.plot([], [], 'g-', label='O2 Concentration')
+        self.blp_line, = self.o2_ax.plot([], [], 'r-', label='BLP')
+        self.spo2_line, = self.vitals_ax.plot([], [], 'b-', label='SpO2')
+        self.pulse_line, = self.vitals_ax.plot([], [], 'r-', label='Pulse')
+        
+        # Configure plots
+        self.altitude_ax.set_title('Altitude (ft)')
+        self.altitude_ax.set_xlabel('Time (s)')
+        self.altitude_ax.set_ylabel('Altitude (ft)')
+        self.altitude_ax.grid(True)
+        self.altitude_ax.legend()
+        
+        self.o2_ax.set_title('O2 Concentration and BLP')
+        self.o2_ax.set_xlabel('Time (s)')
+        self.o2_ax.set_ylabel('Value')
+        self.o2_ax.grid(True)
+        self.o2_ax.legend()
+        
+        self.vitals_ax.set_title('Vital Signs')
+        self.vitals_ax.set_xlabel('Time (s)')
+        self.vitals_ax.set_ylabel('Value')
+        self.vitals_ax.grid(True)
+        self.vitals_ax.legend()
+        
+        # Create canvas
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plots_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Create controls frame
+        controls_frame = ModernLabelFrame(main_container, text="Controls", padding=15)
+        controls_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        # Time scale selection
+        scale_frame = ttk.Frame(controls_frame)
+        scale_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(scale_frame, text="Time Scale:").pack(side=tk.LEFT)
+        self.time_scale_var = tk.StringVar(value="60")
+        scale_combo = ttk.Combobox(
+            scale_frame,
+            textvariable=self.time_scale_var,
+            values=["30", "60", "120", "300"],
+            state="readonly"
+        )
+        scale_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Export button
+        self.export_btn = ModernButton(
+            controls_frame,
+            text="Export Data",
+            command=self.export_data,
+            state=tk.DISABLED
+        )
+        self.export_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Initialize plot data
+        self.plot_data = {
+            'time': [],
+            'altitude': [],
+            'o2_conc': [],
+            'blp': [],
+            'spo2': [],
+            'pulse': []
+        }
+        
+        # Set initial plot limits
+        self.altitude_ax.set_ylim(0, 25000)
+        self.o2_ax.set_ylim(0, 100)
+        self.vitals_ax.set_ylim(0, 200)
+        
+    def update_plots(self):
+        """Update the dashboard plots with new data"""
+        if not self.plotting_active:
+            return
+            
+        try:
+            # Get current data
+            time_data, altitude_data = self.data_store.get_data('altitude')
+            _, o2_data = self.data_store.get_data('o2_conc')
+            _, blp_data = self.data_store.get_data('blp')
+            _, spo2_data = self.data_store.get_data('spo2')
+            _, pulse_data = self.data_store.get_data('pulse')
+            
+            # Update plot data
+            self.plot_data['time'] = time_data
+            self.plot_data['altitude'] = altitude_data
+            self.plot_data['o2_conc'] = o2_data
+            self.plot_data['blp'] = blp_data
+            self.plot_data['spo2'] = spo2_data
+            self.plot_data['pulse'] = pulse_data
+            
+            # Update plot lines
+            self.altitude_line.set_data(time_data, altitude_data)
+            self.o2_line.set_data(time_data, o2_data)
+            self.blp_line.set_data(time_data, blp_data)
+            self.spo2_line.set_data(time_data, spo2_data)
+            self.pulse_line.set_data(time_data, pulse_data)
+            
+            # Update plot limits
+            time_scale = float(self.time_scale_var.get())
+            if time_data:
+                self.altitude_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+                self.o2_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+                self.vitals_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+            
+            # Redraw canvas
+            self.canvas.draw()
+            
+        except Exception as e:
+            log.error(f"Error updating plots: {e}", exc_info=True)
+            
+        # Schedule next update
+        self.root.after(1000, self.update_plots)
 
     def refresh_ports(self):
         """Refresh available COM ports"""
