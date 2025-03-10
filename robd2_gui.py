@@ -327,14 +327,6 @@ class ScriptViewerWindow:
         main_frame = ModernFrame(self.window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Title
-        title_label = ttk.Label(
-            main_frame,
-            text=title,
-            font=('Helvetica', 16, 'bold')
-        )
-        title_label.pack(pady=(0, 20))
-        
         # Create scrollable frame for content
         canvas = tk.Canvas(main_frame)
         scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
