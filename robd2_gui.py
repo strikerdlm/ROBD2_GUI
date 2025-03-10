@@ -200,15 +200,15 @@ class ROBD2GUI:
         self.notebook = ttk.Notebook(self.main_container)
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Create tabs
-        self.create_about_tab()
-        self.create_dashboard_tab()
+        # Create tabs in specified order
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
+        self.create_dashboard_tab()
         self.create_diagnostics_tab()
         self.create_programming_tab()
         self.create_logging_tab()
+        self.create_about_tab()
         
         # Start command processing thread
         self.command_thread = threading.Thread(target=self.process_commands, daemon=True)
