@@ -171,9 +171,9 @@ class ModernLabelFrame(ttk.LabelFrame, ModernWidget):
         self.configure(style="Modern.TLabelframe")
 
 class ChecklistWindow:
-    def __init__(self, parent):
+    def __init__(self, parent, title, items):
         self.window = tk.Toplevel(parent)
-        self.window.title("Pre-flight Checklist")
+        self.window.title(title)
         self.window.geometry("800x600")
         self.window.resizable(True, True)
         
@@ -188,7 +188,7 @@ class ChecklistWindow:
         # Title
         title_label = ttk.Label(
             main_frame,
-            text="Pre-flight Checklist",
+            text=title,
             font=('Helvetica', 16, 'bold')
         )
         title_label.pack(pady=(0, 20))
@@ -211,26 +211,7 @@ class ChecklistWindow:
         canvas.pack(side="left", fill="both", expand=True)
         
         # Checklist items
-        self.checklist_items = [
-            "Asegurar que el sistema ROBD2 esté correctamente desempacado e instalado.",
-            "Verificar que todos los materiales de empaque sean removidos y guardados para uso futuro.",
-            "Confirmar que la conexión de energía sea correcta para su región (115V o 230V) y esté conectada de manera segura a un enchufe con conexión a tierra.",
-            "Conectar el aire (amarillo) y nitrógeno (negro) a 40 a 50 PSIG a sus respectivos puertos.",
-            "Conectar el 100% de oxígeno (verde) a 20 PSIG.",
-            "Conectar la máscara de piloto al Conector de Máscara de Respiración en el panel frontal.",
-            "Asegurar que la sonda del oxímetro de pulso esté conectada.",
-            "Encender el sistema utilizando el interruptor de energía.",
-            "Permitir que el sistema se caliente durante el tiempo indicado (10 minutos).",
-            "Iniciar las auto-pruebas presionando la tecla SELFTST y seguir las instrucciones en pantalla.",
-            "Permitir que el sistema complete las auto-pruebas y auto-calibración. No utilizar la máscara durante este proceso ya que el oxígeno puede no estar presente. Permitir que el proceso muestre el error.",
-            "Registrar los valores de voltaje del sensor de O₂ tanto a concentración ambiente (aprox. 21%) como al 100% O₂, según las indicaciones del manual técnico.",
-            "Ingresar manualmente en la tabla ADC 12 los valores de voltaje obtenidos durante la fase de calibración fallida. Estos valores corresponderán al aire ambiente de Bogotá (con menor concentración de O₂ debido a la altitud) y al O₂ al 100%.",
-            "Omisión de la calibración automática: activar el modo 'Bypass Self-Tests' según las indicaciones del manual (Programming and Technical Guide – Rev 8) para permitir el funcionamiento del ROBD2 sin la calibración automática del sensor de O₂.",
-            "Ejecución de la Prueba de Rendimiento (Profile #20 – TEST):",
-            "Realizar la prueba de rendimiento indicada en la documentación del fabricante con el perfil #20.",
-            "Verificar que las mezclas de O₂ entregadas por el ROBD2 se encuentren dentro de los rangos permitidos establecidos en las tablas de referencia proporcionadas por el fabricante (APPENDIX M en el manual).",
-            "Si las mediciones de O₂ se mantienen dentro de los rangos especificados, se considerará la prueba satisfactoria."
-        ]
+        self.checklist_items = items
         
         # Create checkboxes for each item
         self.checkboxes = []
@@ -288,6 +269,64 @@ class ChecklistWindow:
                 foreground="red"
             )
 
+class ScriptViewerWindow:
+    def __init__(self, parent, title, content):
+        self.window = tk.Toplevel(parent)
+        self.window.title(title)
+        self.window.geometry("800x600")
+        self.window.resizable(True, True)
+        
+        # Make window modal
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        # Create main container
+        main_frame = ModernFrame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text=title,
+            font=('Helvetica', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Create scrollable frame for content
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = ModernFrame(canvas)
+        
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # Add content with proper formatting
+        content_label = ttk.Label(
+            self.scrollable_frame,
+            text=content,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        content_label.pack(pady=10)
+        
+        # Center window on screen
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f'{width}x{height}+{x}+{y}')
+
 class ROBD2GUI:
     def __init__(self, root):
         self.root = root
@@ -322,6 +361,7 @@ class ROBD2GUI:
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
+        self.create_training_tab()
         self.create_dashboard_tab()
         self.create_diagnostics_tab()
         self.create_programming_tab()
@@ -644,7 +684,26 @@ This software is not intended for clinical use or any other settings without pro
         checklist_btn = ModernButton(
             control_frame,
             text="Pre-flight Checklist",
-            command=lambda: ChecklistWindow(self.root)
+            command=lambda: ChecklistWindow(self.root, "Pre-flight Checklist", [
+                "Asegurar que el sistema ROBD2 esté correctamente desempacado e instalado.",
+                "Verificar que todos los materiales de empaque sean removidos y guardados para uso futuro.",
+                "Confirmar que la conexión de energía sea correcta para su región (115V o 230V) y esté conectada de manera segura a un enchufe con conexión a tierra.",
+                "Conectar el aire (amarillo) y nitrógeno (negro) a 40 a 50 PSIG a sus respectivos puertos.",
+                "Conectar el 100% de oxígeno (verde) a 20 PSIG.",
+                "Conectar la máscara de piloto al Conector de Máscara de Respiración en el panel frontal.",
+                "Asegurar que la sonda del oxímetro de pulso esté conectada.",
+                "Encender el sistema utilizando el interruptor de energía.",
+                "Permitir que el sistema se caliente durante el tiempo indicado (10 minutos).",
+                "Iniciar las auto-pruebas presionando la tecla SELFTST y seguir las instrucciones en pantalla.",
+                "Permitir que el sistema complete las auto-pruebas y auto-calibración. No utilizar la máscara durante este proceso ya que el oxígeno puede no estar presente. Permitir que el proceso muestre el error.",
+                "Registrar los valores de voltaje del sensor de O₂ tanto a concentración ambiente (aprox. 21%) como al 100% O₂, según las indicaciones del manual técnico.",
+                "Ingresar manualmente en la tabla ADC 12 los valores de voltaje obtenidos durante la fase de calibración fallida. Estos valores corresponderán al aire ambiente de Bogotá (con menor concentración de O₂ debido a la altitud) y al O₂ al 100%.",
+                "Omisión de la calibración automática: activar el modo 'Bypass Self-Tests' según las indicaciones del manual (Programming and Technical Guide – Rev 8) para permitir el funcionamiento del ROBD2 sin la calibración automática del sensor de O₂.",
+                "Ejecución de la Prueba de Rendimiento (Profile #20 – TEST):",
+                "Realizar la prueba de rendimiento indicada en la documentación del fabricante con el perfil #20.",
+                "Verificar que las mezclas de O₂ entregadas por el ROBD2 se encuentren dentro de los rangos permitidos establecidos en las tablas de referencia proporcionadas por el fabricante (APPENDIX M en el manual).",
+                "Si las mediciones de O₂ se mantienen dentro de los rangos especificados, se considerará la prueba satisfactoria."
+            ])
         )
         checklist_btn.pack(side=tk.LEFT, padx=5)
         
@@ -745,6 +804,307 @@ This software is not intended for clinical use or any other settings without pro
             self.perf_data_labels[label] = ttk.Label(display_frame, text="--")
             self.perf_data_labels[label].grid(row=row, column=1, padx=5, pady=2)
             row += 1
+
+    def create_training_tab(self):
+        """Create the training tab with script viewers and checklists"""
+        training_frame = ModernFrame(self.notebook)
+        self.notebook.add(training_frame, text="Training")
+        
+        # Create main container with padding
+        main_container = ModernFrame(training_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(
+            main_container,
+            text="Training Scripts",
+            font=('Helvetica', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Script buttons frame
+        script_frame = ModernLabelFrame(main_container, text="Training Scripts", padding=15)
+        script_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # Create buttons for each script
+        scripts = [
+            ("Fixed Wing (ES)", "Libreto ala fija"),
+            ("Rotary Wing (ES)", "Libreto Ala Rotatoria"),
+            ("Fixed Wing (EN)", "Script Fixed-Wing"),
+            ("Rotary Wing (EN)", "Script Rotary Wing")
+        ]
+        
+        for text, script_name in scripts:
+            btn = ModernButton(
+                script_frame,
+                text=text,
+                command=lambda s=script_name: self.show_script(s)
+            )
+            btn.pack(fill=tk.X, pady=5)
+        
+        # Checklists frame
+        checklist_frame = ModernLabelFrame(main_container, text="Training Checklists", padding=15)
+        checklist_frame.pack(fill=tk.X)
+        
+        # During training checklist button
+        during_btn = ModernButton(
+            checklist_frame,
+            text="During Training Checklist",
+            command=lambda: ChecklistWindow(self.root, "During Training Checklist", [
+                "Monitorear las lecturas del oxímetro de pulso y asegurar que permanezcan dentro de los límites seguros. (Mínimo SpO2 65%)",
+                "Seguir todas las pautas de seguridad y estar preparado para usar el interruptor de descarga de oxígeno en caso de emergencia de acuerdo con el MANTA vigente",
+                "Asegurar que el sujeto bajo prueba sea monitoreado por cualquier señal de incomodidad o por síntomas que incapaciten al piloto"
+            ])
+        )
+        during_btn.pack(fill=tk.X, pady=5)
+        
+        # After training checklist button
+        after_btn = ModernButton(
+            checklist_frame,
+            text="After Training Checklist",
+            command=lambda: ChecklistWindow(self.root, "After Training Checklist", [
+                "Después de completar el programa, asegurarse de apagar correctamente el sistema.",
+                "Desconectar las fuentes de gas y fuente de energía.",
+                "Realizar una inspección visual del sistema en busca de signos de desgaste o daño.",
+                "Guardar el sistema y accesorios en un lugar seguro y seco.",
+                "Diligenciar el registro en línea del consumo de gases, la retroalimentación del curso por parte de los alumnos y el formato electrónico de novedades"
+            ])
+        )
+        after_btn.pack(fill=tk.X, pady=5)
+
+    def show_script(self, script_name):
+        """Show the selected training script"""
+        # Get script content from notepad context
+        script_content = self.get_script_content(script_name)
+        if script_content:
+            ScriptViewerWindow(self.root, script_name, script_content)
+        else:
+            messagebox.showerror("Error", f"Script '{script_name}' not found")
+
+    def get_script_content(self, script_name):
+        """Get the content of a script from the notepad context"""
+        script_mapping = {
+            "Libreto ala fija": """
+Bienvenido al entrenamiento de hipoxia normobárica de la Dirección de Medicina Aeroespacial, este entrenamiento está diseñado para que usted reconozca los síntomas de hipoxia y realice los procedimientos de recuperación siguiendo la lista de chequeo PRICE revisada en clase. Vamos a presentarle un escenario de simulación de vuelo en el PREPAR3D donde usted estará al mando y al control de una aeronave, estará a una altitud de 10.000 ft y yo le daré instrucciones específicas de los procedimientos que usted tiene que realizar en su aeronave. Es importante recordarle que esta no es una evaluación de destrezas de vuelo ni una simulación precisa de una aeronave en particular, sino que el entrenamiento está diseñado para que usted identifique de los efectos de la altitud sobre el rendimiento humano en cabina.
+
+Como se revisó en clase, deberá reconocer los síntomas de hipoxia y, al aparecer, chequear PRICE y corregirlo con las tres palancas hacia arriba. Siguiendo las instrucciones del instructor.
+
+Vamos a verificar en el siguiente orden el simulador.
+
+Acomodación en la silla (Ajuste abajo a la izquierda, distancia silla y control de mando)
+
+Ajustarse cinturón
+
+Realizar la adaptación de casco y máscara para que a orden del instructor se la ponga
+
+El instructor en este paso mostrará los pedales, el bastón de mando o joke, el cuadrante de la potencia. No será requerido manipular más controles del simulador o configuraciones especificas dado que todo este control manual debe ser ejecutado por el alumno.
+
+Colocar oxímetro de pulso en la mano no dominante
+
+Al cargar el vuelo en el Prepar3D el instructor debe pausar el simulador para iniciar el vuelo. Se ejecuta el perfil en el ROBD y una vez se inicie se debe dar las siguientes instrucciones.
+
+"TH250, Bogotá radar. Vire por derecha rumbo 130, ascienda y mantenga uno cinco mil pies con un régimen de 500 ft/min.
+
+El alumno debe colacionar de la siguiente manera:
+
+"Bogotá Radar, virando por derecha rumbo 130, ascendiendo y manteniendo uno cinco mil pies a 500 ft/min, TH250."
+
+Al completar la orden del CTA, el instructor dará otra orden siguiendo el esquema:
+
+"TH250, Bogotá radar. Vire por derecha rumbo 210, ascienda y mantenga "uno siete mil pies, a 500 ft/min"
+
+Durante el vuelo, el instructor debe preguntarle al alumno:
+
+"Qué debe hacer usted al tener un síntoma de hipoxia?"
+
+Luego de realizar la recuperación, el piloto debe comunicarse con CTA para declarar la emergencia y solicitar descenso para uno cero mil pies y el CTA debe autorizar al alumno:
+
+"TH250, Bogota Radar, autorizado descenso a uno cero mil pies"
+
+Tras terminar este escenario, se le hace la retroalimentación al piloto de los parámetros de vuelo, problemas de comunicación, seguimiento de ordenes etc. El alumno tuvo en hipoxia y recordó que en el primer síntoma hay que recuperarse accionando el regulador con las tres palancas hacia arriba.
+
+El entrenamiento para visión nocturna se debe ejecutar siguiendo el procedimiento:
+
+"Durante la hipoxia, la disminución de oxígeno en el cuerpo afecta de manera significativa la función de los conos en la retina, que son responsables de la percepción del color y la agudeza visual. En condiciones de hipoxia, la capacidad de los conos para funcionar correctamente se reduce, lo que lleva a una disminución de la sensibilidad a los colores y una reducción en la agudeza visual.
+
+Esto es particularmente crítico durante el vuelo nocturno, ya que la visión ya está comprometida por la falta de luz. La hipoxia puede hacer que los colores sean menos distinguibles y que los objetos en el entorno sean más difíciles de identificar, lo cual puede llevar a errores en la interpretación de las señales y los instrumentos de la aeronave
+
+Es fundamental que reconozca estos síntomas y actúe rápidamente. Al primer signo de hipoxia, debe realizar el chequeo PRICE y ajustar el suministro de oxígeno utilizando el regulador con las tres palancas hacia arriba. Esto ayudará a restablecer los niveles adecuados de oxígeno y mejorar la capacidad visual y cognitiva, reduciendo el riesgo de errores durante el vuelo nocturno.
+
+Recuerde que, en condiciones de baja visibilidad y alta demanda cognitiva, como el vuelo nocturno, la hipoxia puede ser particularmente peligrosa, por lo que la vigilancia y la corrección inmediata son esenciales.
+
+Se presenta la carta de navegación AD 2 SKGY - CHIA - FLAMINIO SUAREZ CAMACHO impresa.
+
+Se ejecuta el perfil para visión nocturna en el ROBD2.
+
+En la Carta Visual OACI de SKGY identifique el aeródromo y señale en la carta las montañas entre 8400 y 10200 ft.
+
+Diga la secuencia de puntos en la salida normalizada VFR hacia ECHO entre BIMA y TIBITOC
+
+Lea el contenido de los recuadros rojos en la carta.
+
+El instructor presiona "Oxygen Dump" y se espera un minuto para la recuperación.
+
+Debe indicar al alumno que vea la diferencia entre los colores durante la hipoxia y cuando se suple oxígeno al 100%. Explicar las implicaciones de interpretar señales aeronáuticas en hipoxia en condiciones de oscuridad, que pueden llevar al piloto a mal interpretar señales y a partir de esto cometer errores en la cabina.""",
+            "Libreto Ala Rotatoria": """
+Bienvenido al entrenamiento de hipoxia normobárica de la Dirección de Medicina Aeroespacial, este entrenamiento está diseñado para que usted reconozca los síntomas de hipoxia y realice los procedimientos de recuperación siguiendo la lista de chequeo PRICE revisada en clase. Vamos a presentarle un escenario de simulación de vuelo en el PREPAR3D donde usted estará al mando y al control de una aeronave, estará a una altitud de 10.000 ft y yo le daré instrucciones específicas de los procedimientos que usted tiene que realizar en su aeronave. Es importante recordarle que esta no es una evaluación de destrezas de vuelo ni una simulación precisa de una aeronave en particular, sino que el entrenamiento está diseñado para que usted identifique de los efectos de la altitud sobre el rendimiento humano en cabina.
+
+Como se revisó en clase, deberá reconocer los síntomas de hipoxia y, al aparecer, chequear PRICE y corregirlo con las tres palancas hacia arriba. Siguiendo las instrucciones del instructor.
+
+Vamos a verificar en el siguiente orden el simulador.
+
+Acomodación en la silla
+
+Ajustar el cinturón.
+
+Realizar la adaptación de casco y máscara para que a orden del instructor se la ponga
+
+El instructor en este paso mostrará los pedales, el bastón de mando o joke, el cuadrante de la potencia. No será requerido manipular más controles del simulador o configuraciones especificas dado que todo este control manual debe ser ejecutado por el alumno.
+
+Al cargar el vuelo en el Prepar3D el instructor debe pausar el simulador para iniciar el vuelo. Se ejecuta el perfil en el ROBD y una vez se inicie se debe dar las siguientes instrucciones.
+
+"UH180, Bogotá radar. Vire por derecha rumbo 130, ascienda y mantenga uno tres mil pies".
+
+El alumno debe colacionar de la siguiente manera:
+
+"Bogotá Radar, virando por derecha rumbo 130, asciendo y manteniendo uno tres mil pies, UH180."
+
+Al completar la orden del CTA, el instructor dará otra orden siguiendo el esquema:
+
+"UH180, Bogotá radar. Vire derecha rumbo 210, ascienda y mantenga "uno siete mil pies"
+
+Durante el vuelo, el instructor debe preguntarle al alumno:
+
+"Qué debe hacer usted al tener un síntoma de hipoxia?"
+
+Luego de realizar la recuperación, el piloto debe comunicarse con CTA para declarar la emergencia y solicitar descenso para uno cero mil pies y el CTA debe autorizar al alumno:
+
+"UH180, Bogotá Radar, autorizado descenso a uno cero mil pies"
+
+Tras terminar este escenario, se le hace la retroalimentación al piloto de los parámetros de vuelo, problemas de comunicación, seguimiento de ordenes etc. El alumno tuvo en hipoxia y recordó que en el primer síntoma hay que recuperarse accionando el regulador con las tres palancas hacia arriba.""",
+            "Script Fixed-Wing": """
+Welcome to the normobaric hypoxia training conducted by the Aerospace Medicine Directorate. This training is designed to help you recognize the symptoms of hypoxia and perform recovery procedures using the PRICE checklist reviewed in class. We will present you with a flight simulation scenario in PREPAR3D where you will be in command of an aircraft at an altitude of 10,000 ft, and I will provide specific instructions on the procedures you need to perform. It is important to note that this is not a flight skills evaluation or a precise simulation of any particular aircraft but rather training to help you identify the effects of altitude on human performance in the cockpit.
+
+As reviewed in class, you should recognize the symptoms of hypoxia, and upon the appearance of the first symptom, perform the PRICE checklist and correct it by manipulating the regulator with the three levers up, following the instructor's instructions.
+
+We will verify the simulator in the following order:
+
+1. Seating adjustment
+
+2. Fastening seatbelts
+
+3. Helmet and mask adaptation to be put on at the instructor's command
+
+4. The instructor will show the pedals, control stick or yoke, and the throttle quadrant. No other simulator controls or specific configurations will be required, as all manual control must be executed by the student.
+
+When loading the flight in Prepar3D, the instructor should pause the simulator to start the flight. The profile is executed in the ROBD, and once it begins, the following instructions should be given:
+
+"TH250, Bogotá radar. Turn right heading 130, climb and maintain fifteen thousand feet at a rate of 500 ft/min."
+
+The student should read back as follows:
+
+"Bogotá Radar, turning right heading 130, climbing and maintaining fifteen thousand feet at 500 ft/min, TH250."
+
+Upon completing the ATC order, the instructor will give another order following the scheme:
+
+"TH250, Bogotá radar. Turn right heading "210", climb and maintain "seventeen thousand feet."
+
+During the flight, the instructor should ask the student:
+
+"What should you do upon experiencing a hypoxia symptom?"
+
+After performing the recovery, the pilot must communicate with ATC to declare the emergency and request a descent to ten thousand feet, and ATC should authorize the student:
+
+"TH250, Bogotá Radar, cleared to descend to ten thousand feet."
+
+After completing this scenario, the pilot will receive feedback on flight parameters, communication issues, adherence to orders, etc., experienced during hypoxia. It is crucial to remember that upon the first symptom, recovery is necessary by operating the regulator with the three levers up.
+
+Night Vision Training Procedure:
+
+During hypoxia, the reduction of oxygen in the body significantly affects the function of the cones in the retina, responsible for color perception and visual acuity. In hypoxic conditions, the cones' ability to function correctly is diminished, leading to decreased color sensitivity and visual acuity.
+
+This is particularly critical during night flights, where vision is already compromised by the lack of light. Hypoxia can make colors less distinguishable and objects in the environment harder to identify, which can lead to errors in interpreting signals and instruments in the aircraft.
+
+It is essential to recognize these symptoms and act quickly. At the first sign of hypoxia, you should perform the PRICE checklist and adjust the oxygen supply using the regulator with the three levers up. This will help restore adequate oxygen levels and improve your visual and cognitive capacity, reducing the risk of errors during night flights.
+
+Remember that in conditions of low visibility and high cognitive demand, such as night flights, hypoxia can be particularly dangerous, so vigilance and immediate correction are crucial.
+
+1. The navigation chart AD 2 SKGY - CHIA - FLAMINIO SUAREZ CAMACHO is presented in printed form.
+
+2. The night vision profile is executed in the ROBD2.
+
+3. On the SKGY Visual OACI Chart, identify the aerodrome and point out the mountains between 8400 and 10200 ft.
+
+4. State the sequence of points in the VFR standardized departure to ECHO between BIMA and TIBITOC.
+
+5. Read the content of the red boxes on the chart.
+
+6. The instructor presses "Oxygen Dump" and waits one minute for recovery.
+
+The student should observe the difference in colors during hypoxia and when 100% oxygen is supplied. Explain the implications of interpreting aeronautical signals in hypoxia under dark conditions, which can lead the pilot to misinterpret signals and thus commit errors in the cockpit.""",
+            "Script Rotary Wing": """
+Welcome to the normobaric hypoxia training conducted by the Aerospace Medicine Directorate. This training is designed to help you recognize the symptoms of hypoxia and perform recovery procedures using the PRICE checklist reviewed in class. We will present you with a flight simulation scenario in PREPAR3D where you will be in command of an aircraft at an altitude of 10,000 ft, and I will provide specific instructions on the procedures you need to perform. It is important to note that this is not a flight skills evaluation or a precise simulation of any particular aircraft but rather training to help you identify the effects of altitude on human performance in the cockpit.
+
+As reviewed in class, you should recognize the symptoms of hypoxia, and upon the appearance of the first symptom, perform the PRICE checklist and correct it by manipulating the regulator with the three levers up, following the instructor's instructions.
+
+We will verify the simulator in the following order:
+
+1. Seating adjustment
+
+2. Fastening seatbelts
+
+3. Helmet and mask adaptation to be put on at the instructor's command
+
+4. The instructor will show the pedals, control stick or yoke, and the throttle quadrant. No other simulator controls or specific configurations will be required, as all manual control must be executed by the student.
+
+When loading the flight in Prepar3D, the instructor should pause the simulator to start the flight. The profile is executed in the ROBD, and once it begins, the following instructions should be given:
+
+"TH250, Bogotá radar. Turn right heading 130, climb and maintain fifteen thousand feet at a rate of 500 ft/min."
+
+The student should read back as follows:
+
+"Bogotá Radar, turning right heading 130, climbing and maintaining fifteen thousand feet at 500 ft/min, TH250."
+
+Upon completing the ATC order, the instructor will give another order following the scheme:
+
+"TH250, Bogotá radar. Turn right heading "210", climb and maintain "seventeen thousand feet."
+
+During the flight, the instructor should ask the student:
+
+"What should you do upon experiencing a hypoxia symptom?"
+
+After performing the recovery, the pilot must communicate with ATC to declare the emergency and request a descent to ten thousand feet, and ATC should authorize the student:
+
+"TH250, Bogotá Radar, cleared to descend to ten thousand feet."
+
+After completing this scenario, the pilot will receive feedback on flight parameters, communication issues, adherence to orders, etc., experienced during hypoxia. It is crucial to remember that upon the first symptom, recovery is necessary by operating the regulator with the three levers up.
+
+Night Vision Training Procedure:
+
+During hypoxia, the reduction of oxygen in the body significantly affects the function of the cones in the retina, responsible for color perception and visual acuity. In hypoxic conditions, the cones' ability to function correctly is diminished, leading to decreased color sensitivity and visual acuity.
+
+This is particularly critical during night flights, where vision is already compromised by the lack of light. Hypoxia can make colors less distinguishable and objects in the environment harder to identify, which can lead to errors in interpreting signals and instruments in the aircraft.
+
+It is essential to recognize these symptoms and act quickly. At the first sign of hypoxia, you should perform the PRICE checklist and adjust the oxygen supply using the regulator with the three levers up. This will help restore adequate oxygen levels and improve your visual and cognitive capacity, reducing the risk of errors during night flights.
+
+Remember that in conditions of low visibility and high cognitive demand, such as night flights, hypoxia can be particularly dangerous, so vigilance and immediate correction are crucial.
+
+1. The navigation chart AD 2 SKGY - CHIA - FLAMINIO SUAREZ CAMACHO is presented in printed form.
+
+2. The night vision profile is executed in the ROBD2.
+
+3. On the SKGY Visual OACI Chart, identify the aerodrome and point out the mountains between 8400 and 10200 ft.
+
+4. State the sequence of points in the VFR standardized departure to ECHO between BIMA and TIBITOC.
+
+5. Read the content of the red boxes on the chart.
+
+6. The instructor presses "Oxygen Dump" and waits one minute for recovery.
+
+The student should observe the difference in colors during hypoxia and when 100% oxygen is supplied. Explain the implications of interpreting aeronautical signals in hypoxia under dark conditions, which can lead the pilot to misinterpret signals and thus commit errors in the cockpit."""
+        }
+        
+        return script_mapping.get(script_name, None)
 
     def create_diagnostics_tab(self):
         """Create the diagnostics tab"""
