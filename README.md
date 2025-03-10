@@ -20,6 +20,10 @@ The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrati
 - Modern, intuitive user interface
 - Automatic data validation and range checking
 - CSV data export with timestamps
+- Training tab with script viewers and checklists
+- Mouse wheel scrolling support for all scrollable windows
+- Pre-flight, during training, and post-training checklists
+- Support for both English and Spanish training scripts
 
 ## Requirements
 

@@ -152,11 +152,48 @@ class ModernWidget:
             font=('Helvetica', 10, 'bold')
         )
 
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+        self.widget.bind('<Enter>', self.enter)
+        self.widget.bind('<Leave>', self.leave)
+        
+    def enter(self, event=None):
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+        
+        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip.wm_overrideredirect(True)
+        self.tooltip.wm_geometry(f"+{x}+{y}")
+        
+        label = ttk.Label(
+            self.tooltip,
+            text=self.text,
+            justify=tk.LEFT,
+            background="#ffffe0",
+            relief=tk.SOLID,
+            borderwidth=1
+        )
+        label.pack()
+        
+    def leave(self, event=None):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+
 class ModernButton(ttk.Button, ModernWidget):
     """Custom button with modern styling"""
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)
         self.configure(style="Modern.TButton")
+        self.tooltip = None
+        
+    def set_tooltip(self, text):
+        """Set tooltip text for the button"""
+        self.tooltip = ToolTip(self, text)
 
 class ModernFrame(ttk.Frame, ModernWidget):
     """Custom frame with modern styling"""
@@ -245,6 +282,28 @@ class ChecklistWindow:
         )
         self.status_label.pack(pady=10)
         
+        # Bind mouse wheel events for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+        def _on_linux_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.num)), "units")
+            
+        # Bind for Windows
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Bind for Linux
+        canvas.bind_all("<Button-4>", _on_linux_mousewheel)
+        canvas.bind_all("<Button-5>", _on_linux_mousewheel)
+        
+        # Unbind when window is closed
+        def _on_closing():
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+            self.window.destroy()
+            
+        self.window.protocol("WM_DELETE_WINDOW", _on_closing)
+        
         # Center window on screen
         self.window.update_idletasks()
         width = self.window.winfo_width()
@@ -252,22 +311,6 @@ class ChecklistWindow:
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f'{width}x{height}+{x}+{y}')
-        
-    def check_completion(self):
-        """Check if all items are completed"""
-        all_completed = all(var.get() for var in self.checkboxes)
-        if all_completed:
-            self.status_label.configure(
-                text="Checklist completed successfully!",
-                foreground="green"
-            )
-            self.complete_btn.configure(state=tk.DISABLED)
-            self.window.after(2000, self.window.destroy)
-        else:
-            self.status_label.configure(
-                text="Please complete all items before proceeding.",
-                foreground="red"
-            )
 
 class ScriptViewerWindow:
     def __init__(self, parent, title, content):
@@ -319,6 +362,28 @@ class ScriptViewerWindow:
         )
         content_label.pack(pady=10)
         
+        # Bind mouse wheel events for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+        def _on_linux_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.num)), "units")
+            
+        # Bind for Windows
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Bind for Linux
+        canvas.bind_all("<Button-4>", _on_linux_mousewheel)
+        canvas.bind_all("<Button-5>", _on_linux_mousewheel)
+        
+        # Unbind when window is closed
+        def _on_closing():
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+            self.window.destroy()
+            
+        self.window.protocol("WM_DELETE_WINDOW", _on_closing)
+        
         # Center window on screen
         self.window.update_idletasks()
         width = self.window.winfo_width()
@@ -327,11 +392,77 @@ class ScriptViewerWindow:
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f'{width}x{height}+{x}+{y}')
 
+class LoadingIndicator:
+    def __init__(self, parent, message="Loading..."):
+        self.window = tk.Toplevel(parent)
+        self.window.title("")
+        self.window.geometry("300x100")
+        self.window.resizable(False, False)
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        # Center window
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Create frame
+        frame = ttk.Frame(self.window)
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Add message
+        ttk.Label(
+            frame,
+            text=message,
+            font=('Helvetica', 10)
+        ).pack(pady=(0, 10))
+        
+        # Add progress bar
+        self.progress = ttk.Progressbar(
+            frame,
+            mode='indeterminate'
+        )
+        self.progress.pack(fill=tk.X)
+        self.progress.start()
+        
+    def destroy(self):
+        self.window.destroy()
+
 class ROBD2GUI:
     def __init__(self, root):
         self.root = root
         self.root.title("ROBD2 Diagnostic Interface")
         self.root.geometry("1200x800")
+        
+        # Create menu bar
+        self.menu_bar = tk.Menu(root)
+        root.config(menu=self.menu_bar)
+        
+        # File menu
+        file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Connect (Ctrl+C)", command=self.connect_to_device)
+        file_menu.add_command(label="Disconnect (Ctrl+D)", command=self.disconnect_device)
+        file_menu.add_separator()
+        file_menu.add_command(label="Export Data (Ctrl+E)", command=self.export_data)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=root.quit)
+        
+        # Tools menu
+        tools_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Refresh Ports (Ctrl+R)", command=self.refresh_ports)
+        tools_menu.add_command(label="Start Logging (Ctrl+S)", command=self.start_logging)
+        tools_menu.add_command(label="Stop Logging (Ctrl+X)", command=self.stop_logging)
+        
+        # Help menu
+        help_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=lambda: self.notebook.select(self.notebook.tabs().index("About")))
+        help_menu.add_command(label="Documentation", command=self.show_documentation)
         
         # Initialize variables
         self.serial_port = None
@@ -368,6 +499,14 @@ class ROBD2GUI:
         self.create_logging_tab()
         self.create_about_tab()
         
+        # Add keyboard shortcuts
+        self.root.bind('<Control-r>', lambda e: self.refresh_ports())
+        self.root.bind('<Control-c>', lambda e: self.connect_to_device() if not self.is_connected else None)
+        self.root.bind('<Control-d>', lambda e: self.disconnect_device() if self.is_connected else None)
+        self.root.bind('<Control-e>', lambda e: self.export_data() if hasattr(self, 'data_store') else None)
+        self.root.bind('<Control-s>', lambda e: self.start_logging() if self.is_connected else None)
+        self.root.bind('<Control-x>', lambda e: self.stop_logging() if hasattr(self, 'data_logger') else None)
+        
         # Start command processing thread
         self.command_thread = threading.Thread(target=self.process_commands, daemon=True)
         self.command_thread.start()
@@ -377,6 +516,142 @@ class ROBD2GUI:
         
         # Start plot updates
         self.root.after(1000, self.update_plots)
+
+    def show_documentation(self):
+        """Show the documentation window"""
+        doc_window = tk.Toplevel(self.root)
+        doc_window.title("Documentation")
+        doc_window.geometry("800x600")
+        
+        # Create main container
+        main_frame = ModernFrame(doc_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text="ROBD2 Diagnostic Interface Documentation",
+            font=('Helvetica', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Create scrollable frame for content
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ModernFrame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # Add documentation content
+        content = """
+Keyboard Shortcuts:
+------------------
+Ctrl+C: Connect to device
+Ctrl+D: Disconnect from device
+Ctrl+E: Export data
+Ctrl+R: Refresh ports
+Ctrl+S: Start logging
+Ctrl+X: Stop logging
+
+Connection Tab:
+--------------
+1. Select the COM port where the ROBD2 device is connected
+2. Click "Connect" or press Ctrl+C to establish connection
+3. Use the pre-flight checklist to verify device setup
+
+Calibration Tab:
+---------------
+1. Select the device to calibrate
+2. Follow the calibration procedure
+3. Monitor results in real-time
+
+Performance Tab:
+---------------
+1. Select the device to monitor
+2. Start/stop performance monitoring
+3. View real-time data
+
+Training Tab:
+------------
+1. Access training scripts for different aircraft types
+2. Use checklists during and after training
+3. Follow proper procedures
+
+Dashboard Tab:
+-------------
+1. View real-time plots of various parameters
+2. Export data for analysis
+3. Monitor statistics
+
+Diagnostics Tab:
+---------------
+1. Send diagnostic commands
+2. View device responses
+3. Troubleshoot issues
+
+Programming Tab:
+---------------
+1. Create and modify device programs
+2. Add hold and change steps
+3. Review program configuration
+
+Logging Tab:
+-----------
+1. Start/stop data logging
+2. Monitor log data
+3. Export logs for analysis
+
+For more information, please refer to the ROBD2 Technical Manual.
+"""
+        
+        content_label = ttk.Label(
+            scrollable_frame,
+            text=content,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        content_label.pack(pady=10)
+        
+        # Bind mouse wheel events for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+        def _on_linux_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.num)), "units")
+            
+        # Bind for Windows
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Bind for Linux
+        canvas.bind_all("<Button-4>", _on_linux_mousewheel)
+        canvas.bind_all("<Button-5>", _on_linux_mousewheel)
+        
+        # Unbind when window is closed
+        def _on_closing():
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+            doc_window.destroy()
+            
+        doc_window.protocol("WM_DELETE_WINDOW", _on_closing)
+        
+        # Center window on screen
+        doc_window.update_idletasks()
+        width = doc_window.winfo_width()
+        height = doc_window.winfo_height()
+        x = (doc_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (doc_window.winfo_screenheight() // 2) - (height // 2)
+        doc_window.geometry(f'{width}x{height}+{x}+{y}')
 
     def create_about_tab(self):
         """Create the About tab with project information"""
@@ -653,6 +928,7 @@ This software is not intended for clinical use or any other settings without pro
         self.port_var = tk.StringVar()
         self.port_combo = ttk.Combobox(port_frame, textvariable=self.port_var)
         self.port_combo.pack(fill=tk.X, pady=5)
+        ToolTip(self.port_combo, "Select the COM port where the ROBD2 device is connected")
         
         refresh_btn = ModernButton(
             port_frame,
@@ -660,6 +936,7 @@ This software is not intended for clinical use or any other settings without pro
             command=self.refresh_ports
         )
         refresh_btn.pack(pady=5)
+        refresh_btn.set_tooltip("Scan for available COM ports")
         
         # Connection controls
         control_frame = ttk.LabelFrame(connection_frame, text="Connection Controls", padding=10)
@@ -671,6 +948,7 @@ This software is not intended for clinical use or any other settings without pro
             command=self.connect_to_device
         )
         self.connect_btn.pack(side=tk.LEFT, padx=5)
+        self.connect_btn.set_tooltip("Connect to the selected ROBD2 device")
         
         self.disconnect_btn = ModernButton(
             control_frame,
@@ -679,6 +957,7 @@ This software is not intended for clinical use or any other settings without pro
             state=tk.DISABLED
         )
         self.disconnect_btn.pack(side=tk.LEFT, padx=5)
+        self.disconnect_btn.set_tooltip("Disconnect from the ROBD2 device")
         
         # Pre-flight checklist button
         checklist_btn = ModernButton(
@@ -706,6 +985,7 @@ This software is not intended for clinical use or any other settings without pro
             ])
         )
         checklist_btn.pack(side=tk.LEFT, padx=5)
+        checklist_btn.set_tooltip("Open the pre-flight checklist for device setup")
         
         # Status display
         status_frame = ttk.LabelFrame(connection_frame, text="Connection Status", padding=10)
@@ -1282,6 +1562,10 @@ The student should observe the difference in colors during hypoxia and when 100%
                 messagebox.showerror("Error", "Please select a COM port")
                 return
                 
+            # Show loading indicator
+            loading = LoadingIndicator(self.root, "Connecting to device...")
+            self.root.update()
+            
             self.serial_port = serial.Serial(port, 9600, timeout=1)
             self.is_connected = True
             
@@ -1298,6 +1582,9 @@ The student should observe the difference in colors during hypoxia and when 100%
             # Update status
             self.status_bar.configure(text=f"Connected to {port}")
             self.status_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Connected to {port}\n")
+            
+            # Destroy loading indicator
+            loading.destroy()
             
         except serial.SerialException as e:
             log.error(f"Serial connection error: {e}", exc_info=True)
