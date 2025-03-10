@@ -18,6 +18,7 @@ from collections import deque
 from calibration_data import CalibrationMonitor
 from Performance import PerformanceMonitor
 from COM_serial import DataLogger
+from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 
 # Configure logging
 logging.basicConfig(
@@ -1515,6 +1516,12 @@ The student should observe the difference in colors during hypoxia and when 100%
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
+        # Add toolbar
+        toolbar_frame = ttk.Frame(plots_frame)
+        toolbar_frame.pack(fill=tk.X, pady=(5, 0))
+        toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
+        toolbar.update()
+        
         # Create controls frame
         controls_frame = ModernLabelFrame(main_container, text="Controls", padding=15)
         controls_frame.pack(fill=tk.X, pady=(20, 0))
@@ -1531,6 +1538,61 @@ The student should observe the difference in colors during hypoxia and when 100%
             state="readonly"
         )
         scale_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Individual plot buttons
+        plot_buttons_frame = ttk.Frame(controls_frame)
+        plot_buttons_frame.pack(fill=tk.X, pady=10)
+        ttk.Label(plot_buttons_frame, text="View Individual Plots:").pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Altitude button
+        altitude_btn = ModernButton(
+            plot_buttons_frame,
+            text="Altitude",
+            command=lambda: self.show_individual_plot("altitude"),
+            state=tk.NORMAL
+        )
+        altitude_btn.pack(side=tk.LEFT, padx=5)
+        altitude_btn.set_tooltip("View detailed altitude plot")
+        
+        # O2 Concentration button
+        o2_btn = ModernButton(
+            plot_buttons_frame,
+            text="O2 Concentration",
+            command=lambda: self.show_individual_plot("o2_conc"),
+            state=tk.NORMAL
+        )
+        o2_btn.pack(side=tk.LEFT, padx=5)
+        o2_btn.set_tooltip("View detailed O2 concentration plot")
+        
+        # BLP button
+        blp_btn = ModernButton(
+            plot_buttons_frame,
+            text="BLP",
+            command=lambda: self.show_individual_plot("blp"),
+            state=tk.NORMAL
+        )
+        blp_btn.pack(side=tk.LEFT, padx=5)
+        blp_btn.set_tooltip("View detailed Breathing Loop Pressure plot")
+        
+        # SpO2 button
+        spo2_btn = ModernButton(
+            plot_buttons_frame,
+            text="SpO2",
+            command=lambda: self.show_individual_plot("spo2"),
+            state=tk.NORMAL
+        )
+        spo2_btn.pack(side=tk.LEFT, padx=5)
+        spo2_btn.set_tooltip("View detailed SpO2 plot")
+        
+        # Pulse button
+        pulse_btn = ModernButton(
+            plot_buttons_frame,
+            text="Pulse",
+            command=lambda: self.show_individual_plot("pulse"),
+            state=tk.NORMAL
+        )
+        pulse_btn.pack(side=tk.LEFT, padx=5)
+        pulse_btn.set_tooltip("View detailed pulse rate plot")
         
         # Export button
         self.export_btn = ModernButton(
@@ -1556,6 +1618,153 @@ The student should observe the difference in colors during hypoxia and when 100%
         self.o2_ax.set_ylim(0, 100)
         self.vitals_ax.set_ylim(0, 200)
         
+    def show_individual_plot(self, plot_type):
+        """Show an individual plot in a separate window"""
+        # Define plot configurations
+        plot_config = {
+            'altitude': {
+                'title': 'Altitude',
+                'ylabel': 'Altitude (ft)',
+                'color': 'blue',
+                'ylim': (0, 25000)
+            },
+            'o2_conc': {
+                'title': 'O2 Concentration',
+                'ylabel': 'O2 Concentration (%)',
+                'color': 'green',
+                'ylim': (0, 100)
+            },
+            'blp': {
+                'title': 'Breathing Loop Pressure',
+                'ylabel': 'BLP (mmHg)',
+                'color': 'red',
+                'ylim': (0, 100)
+            },
+            'spo2': {
+                'title': 'SpO2',
+                'ylabel': 'SpO2 (%)',
+                'color': 'blue',
+                'ylim': (50, 100)
+            },
+            'pulse': {
+                'title': 'Pulse Rate',
+                'ylabel': 'Pulse (bpm)',
+                'color': 'red',
+                'ylim': (20, 220)
+            }
+        }
+        
+        config = plot_config[plot_type]
+        
+        # Create a new window
+        plot_window = tk.Toplevel(self.root)
+        plot_window.title(f"ROBD2 - {config['title']} Plot")
+        plot_window.geometry("800x600")
+        
+        # Create a frame for the plot
+        plot_frame = ModernFrame(plot_window)
+        plot_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Create figure and axis
+        fig = Figure(figsize=(10, 6), dpi=100)
+        ax = fig.add_subplot(111)
+        
+        # Get data
+        time_data, plot_data = self.data_store.get_data(plot_type)
+        
+        # Create the plot
+        line, = ax.plot(time_data, plot_data, color=config['color'], linewidth=2)
+        
+        # Configure the plot
+        ax.set_title(config['title'], fontsize=16)
+        ax.set_xlabel('Time (s)', fontsize=12)
+        ax.set_ylabel(config['ylabel'], fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        
+        # Set limits
+        if time_data:
+            time_scale = float(self.time_scale_var.get())
+            ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+        ax.set_ylim(config['ylim'])
+        
+        # Create canvas
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Add toolbar
+        toolbar_frame = ttk.Frame(plot_frame)
+        toolbar_frame.pack(fill=tk.X)
+        toolbar = NavigationToolbar2Tk(canvas, toolbar_frame)
+        toolbar.update()
+        
+        # Add controls
+        controls_frame = ModernLabelFrame(plot_frame, text="Controls", padding=10)
+        controls_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        # Time scale selection
+        scale_frame = ttk.Frame(controls_frame)
+        scale_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(scale_frame, text="Time Scale:").pack(side=tk.LEFT)
+        
+        # Create a local copy of the time scale variable
+        local_time_scale_var = tk.StringVar(value=self.time_scale_var.get())
+        scale_combo = ttk.Combobox(
+            scale_frame,
+            textvariable=local_time_scale_var,
+            values=["30", "60", "120", "300"],
+            state="readonly"
+        )
+        scale_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Function to update the plot
+        def update_plot():
+            if not self.plotting_active:
+                return
+                
+            try:
+                # Get current data
+                time_data, plot_data = self.data_store.get_data(plot_type)
+                
+                # Update plot line
+                line.set_data(time_data, plot_data)
+                
+                # Update plot limits
+                time_scale = float(local_time_scale_var.get())
+                if time_data:
+                    ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+                
+                # Redraw canvas
+                canvas.draw()
+                
+            except Exception as e:
+                log.error(f"Error updating individual plot: {e}", exc_info=True)
+                
+            # Schedule next update
+            plot_window.after(1000, update_plot)
+        
+        # Start updating the plot
+        update_plot()
+        
+        # Function to handle window closing
+        def on_closing():
+            plot_window.destroy()
+        
+        plot_window.protocol("WM_DELETE_WINDOW", on_closing)
+        
+        # Center the window on the screen
+        plot_window.update_idletasks()
+        width = plot_window.winfo_width()
+        height = plot_window.winfo_height()
+        x = (plot_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (plot_window.winfo_screenheight() // 2) - (height // 2)
+        plot_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+        
+        # Make window modal
+        plot_window.transient(self.root)
+        plot_window.grab_set()
+        self.root.wait_window(plot_window)
+
     def update_plots(self):
         """Update the dashboard plots with new data"""
         if not self.plotting_active:
