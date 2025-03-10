@@ -10,6 +10,16 @@ This software is **EXPERIMENTAL** and should only be used in controlled environm
 
 The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
 
+### Author
+**Diego Malpica MD**
+- Aerospace Medicine
+- Aerospace Physiology Instructor
+- Aerospace Scientific Department
+- Aerospace Medicine Directorate
+- Colombian Aerospace Force
+
+Initial work - [strikerdlm](https://github.com/strikerdlm)
+
 ## Features
 
 - Real-time data visualization with customizable time scales
