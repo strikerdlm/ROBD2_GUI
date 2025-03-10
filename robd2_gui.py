@@ -311,6 +311,15 @@ class ChecklistWindow:
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f'{width}x{height}+{x}+{y}')
+        
+    def check_completion(self):
+        """Check if all items in the checklist are completed"""
+        all_checked = all(var.get() for var in self.checkboxes)
+        if all_checked:
+            self.status_label.configure(text="All items completed!", foreground="green")
+            self.complete_btn.configure(state=tk.DISABLED)
+        else:
+            self.status_label.configure(text="Please complete all items", foreground="red")
 
 class ScriptViewerWindow:
     def __init__(self, parent, title, content):
@@ -453,7 +462,6 @@ class ROBD2GUI:
         # Help menu
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(label="About", command=lambda: self.notebook.select(self.notebook.tabs().index("About")))
         help_menu.add_command(label="Documentation", command=self.show_documentation)
         
         # Initialize variables
@@ -481,6 +489,7 @@ class ROBD2GUI:
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
         # Create tabs in specified order
+        self.create_about_tab()  # Create About tab first
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
@@ -489,7 +498,9 @@ class ROBD2GUI:
         self.create_diagnostics_tab()
         self.create_programming_tab()
         self.create_logging_tab()
-        self.create_about_tab()
+        
+        # Add About menu command after tabs are created
+        help_menu.add_command(label="About", command=lambda: self.notebook.select(self.notebook.tabs().index("About")))
         
         # Add keyboard shortcuts
         self.root.bind('<Control-r>', lambda e: self.refresh_ports())
