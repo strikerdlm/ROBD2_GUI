@@ -435,7 +435,7 @@ class LoadingIndicator:
 class ROBD2GUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("ROBD2 Diagnostic Interface")
+        self.root.title("ROBD2 Diagnostic UI by Diego Malpica")
         self.root.geometry("1200x800")
         
         # Create menu bar
@@ -520,20 +520,37 @@ class ROBD2GUI:
     def show_about(self):
         """Show the About window"""
         about_window = tk.Toplevel(self.root)
-        about_window.title("About ROBD2 Diagnostic Interface")
-        about_window.geometry("800x600")
+        about_window.title("About ROBD2 Diagnostic UI")
+        about_window.geometry("800x700")  # Make window taller
+        
+        # Create a canvas with scrollbar for scrolling
+        canvas = tk.Canvas(about_window)
+        scrollbar = ttk.Scrollbar(about_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar.pack(side="right", fill="y")
         
         # Create main container
-        main_frame = ModernFrame(about_window)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
+        main_frame = ModernFrame(scrollable_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
         
         # Title with custom styling
         title_frame = ttk.Frame(main_frame)
-        title_frame.pack(fill=tk.X, pady=(0, 30))
+        title_frame.pack(fill=tk.X, pady=(0, 20))
         
         title_label = ttk.Label(
             title_frame,
-            text="ROBD2 Diagnostic Interface",
+            text="ROBD2 Diagnostic UI",
             font=('Helvetica', 24, 'bold')
         )
         title_label.pack()
@@ -547,7 +564,7 @@ class ROBD2GUI:
         
         # Version with custom styling
         version_frame = ttk.Frame(main_frame)
-        version_frame.pack(fill=tk.X, pady=(0, 30))
+        version_frame.pack(fill=tk.X, pady=(0, 20))
         
         version_label = ttk.Label(
             version_frame,
@@ -556,72 +573,9 @@ class ROBD2GUI:
         )
         version_label.pack()
         
-        # Description with custom styling
-        description_frame = ModernLabelFrame(main_frame, text="Overview", padding=15)
-        description_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        description_text = """
-The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
-
-This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
-"""
-        description_label = ttk.Label(
-            description_frame,
-            text=description_text,
-            wraplength=700,
-            justify=tk.CENTER,
-            font=('Helvetica', 11)
-        )
-        description_label.pack()
-        
-        # Features with custom styling
-        features_frame = ModernLabelFrame(main_frame, text="Key Features", padding=15)
-        features_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        features_text = """
-• Real-time data visualization with customizable time scales
-• Comprehensive data logging and export capabilities
-• Device calibration tools
-• Performance monitoring
-• Diagnostic command interface
-• Modern, intuitive user interface
-• Automatic data validation and range checking
-• CSV data export with timestamps
-"""
-        features_label = ttk.Label(
-            features_frame,
-            text=features_text,
-            wraplength=700,
-            justify=tk.LEFT,
-            font=('Helvetica', 11)
-        )
-        features_label.pack()
-        
-        # Requirements with custom styling
-        requirements_frame = ModernLabelFrame(main_frame, text="System Requirements", padding=15)
-        requirements_frame.pack(fill=tk.X, pady=(0, 30))
-        
-        requirements_text = """
-• Python 3.8 or higher
-• Windows 10 or higher
-• Required Python packages:
-  - pyserial
-  - rich
-  - matplotlib
-  - numpy
-"""
-        requirements_label = ttk.Label(
-            requirements_frame,
-            text=requirements_text,
-            wraplength=700,
-            justify=tk.LEFT,
-            font=('Helvetica', 11)
-        )
-        requirements_label.pack()
-        
-        # Author information with custom styling
+        # Author information with custom styling - Moved to top for visibility
         author_frame = ModernLabelFrame(main_frame, text="Author", padding=15)
-        author_frame.pack(fill=tk.X, pady=(0, 30))
+        author_frame.pack(fill=tk.X, pady=(0, 20))
         
         author_text = """
 Diego Malpica MD
@@ -648,31 +602,98 @@ For contributing please read the CONTRIBUTING.md file in the repository.
         )
         author_label.pack()
         
-        # Disclaimer with custom styling
-        disclaimer_frame = ModernLabelFrame(main_frame, text="Disclaimer", padding=15)
-        disclaimer_frame.pack(fill=tk.X)
+        # Description with custom styling
+        description_frame = ModernLabelFrame(main_frame, text="Overview", padding=15)
+        description_frame.pack(fill=tk.X, pady=(0, 20))
         
-        disclaimer_text = """
-This software is provided "as is" without any warranties, express or implied. The authors and developers are not responsible for any damages or injuries that may occur from the use of this software.
+        description_text = """
+The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
 
-This software is not intended for clinical use or any other settings without proper medical supervision.
+This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
 """
-        disclaimer_label = ttk.Label(
-            disclaimer_frame,
-            text=disclaimer_text,
+        description_label = ttk.Label(
+            description_frame,
+            text=description_text,
             wraplength=700,
             justify=tk.CENTER,
             font=('Helvetica', 11)
         )
-        disclaimer_label.pack()
+        description_label.pack()
         
-        # Center window on screen
+        # Features with custom styling
+        features_frame = ModernLabelFrame(main_frame, text="Key Features", padding=15)
+        features_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        features_text = """
+• Real-time data visualization with customizable time scales
+• Comprehensive data logging and export capabilities
+• Device calibration tools
+• Performance monitoring
+• Diagnostic command interface
+• Modern, intuitive user interface
+• Automatic data validation and range checking
+• CSV data export with timestamps
+"""
+        features_label = ttk.Label(
+            features_frame,
+            text=features_text,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        features_label.pack()
+        
+        # Requirements with custom styling
+        requirements_frame = ModernLabelFrame(main_frame, text="System Requirements", padding=15)
+        requirements_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        requirements_text = """
+• Python 3.8 or higher
+• Windows 10 or higher
+• Required Python packages:
+  - pyserial
+  - rich
+  - matplotlib
+  - numpy
+"""
+        requirements_label = ttk.Label(
+            requirements_frame,
+            text=requirements_text,
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
+        )
+        requirements_label.pack()
+        
+        # Add mousewheel scrolling support
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+        def _on_linux_mousewheel(event):
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+                
+        # Bind mousewheel events
+        if sys.platform.startswith('win'):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        else:
+            canvas.bind_all("<Button-4>", _on_linux_mousewheel)
+            canvas.bind_all("<Button-5>", _on_linux_mousewheel)
+            
+        # Center the window on the screen
         about_window.update_idletasks()
         width = about_window.winfo_width()
         height = about_window.winfo_height()
         x = (about_window.winfo_screenwidth() // 2) - (width // 2)
         y = (about_window.winfo_screenheight() // 2) - (height // 2)
-        about_window.geometry(f'{width}x{height}+{x}+{y}')
+        about_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+        
+        # Make window modal
+        about_window.transient(self.root)
+        about_window.grab_set()
+        self.root.wait_window(about_window)
 
     def show_documentation(self):
         """Show the documentation window"""
