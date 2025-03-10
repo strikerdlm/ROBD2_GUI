@@ -170,6 +170,124 @@ class ModernLabelFrame(ttk.LabelFrame, ModernWidget):
         super().__init__(master, **kwargs)
         self.configure(style="Modern.TLabelframe")
 
+class ChecklistWindow:
+    def __init__(self, parent):
+        self.window = tk.Toplevel(parent)
+        self.window.title("Pre-flight Checklist")
+        self.window.geometry("800x600")
+        self.window.resizable(True, True)
+        
+        # Make window modal
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        # Create main container
+        main_frame = ModernFrame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text="Pre-flight Checklist",
+            font=('Helvetica', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Create scrollable frame for checklist
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = ModernFrame(canvas)
+        
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # Checklist items
+        self.checklist_items = [
+            "Asegurar que el sistema ROBD2 esté correctamente desempacado e instalado.",
+            "Verificar que todos los materiales de empaque sean removidos y guardados para uso futuro.",
+            "Confirmar que la conexión de energía sea correcta para su región (115V o 230V) y esté conectada de manera segura a un enchufe con conexión a tierra.",
+            "Conectar el aire (amarillo) y nitrógeno (negro) a 40 a 50 PSIG a sus respectivos puertos.",
+            "Conectar el 100% de oxígeno (verde) a 20 PSIG.",
+            "Conectar la máscara de piloto al Conector de Máscara de Respiración en el panel frontal.",
+            "Asegurar que la sonda del oxímetro de pulso esté conectada.",
+            "Encender el sistema utilizando el interruptor de energía.",
+            "Permitir que el sistema se caliente durante el tiempo indicado (10 minutos).",
+            "Iniciar las auto-pruebas presionando la tecla SELFTST y seguir las instrucciones en pantalla.",
+            "Permitir que el sistema complete las auto-pruebas y auto-calibración. No utilizar la máscara durante este proceso ya que el oxígeno puede no estar presente. Permitir que el proceso muestre el error.",
+            "Registrar los valores de voltaje del sensor de O₂ tanto a concentración ambiente (aprox. 21%) como al 100% O₂, según las indicaciones del manual técnico.",
+            "Ingresar manualmente en la tabla ADC 12 los valores de voltaje obtenidos durante la fase de calibración fallida. Estos valores corresponderán al aire ambiente de Bogotá (con menor concentración de O₂ debido a la altitud) y al O₂ al 100%.",
+            "Omisión de la calibración automática: activar el modo 'Bypass Self-Tests' según las indicaciones del manual (Programming and Technical Guide – Rev 8) para permitir el funcionamiento del ROBD2 sin la calibración automática del sensor de O₂.",
+            "Ejecución de la Prueba de Rendimiento (Profile #20 – TEST):",
+            "Realizar la prueba de rendimiento indicada en la documentación del fabricante con el perfil #20.",
+            "Verificar que las mezclas de O₂ entregadas por el ROBD2 se encuentren dentro de los rangos permitidos establecidos en las tablas de referencia proporcionadas por el fabricante (APPENDIX M en el manual).",
+            "Si las mediciones de O₂ se mantienen dentro de los rangos especificados, se considerará la prueba satisfactoria."
+        ]
+        
+        # Create checkboxes for each item
+        self.checkboxes = []
+        for item in self.checklist_items:
+            frame = ttk.Frame(self.scrollable_frame)
+            frame.pack(fill=tk.X, pady=5)
+            
+            var = tk.BooleanVar()
+            checkbox = ttk.Checkbutton(
+                frame,
+                text=item,
+                variable=var,
+                wraplength=700
+            )
+            checkbox.pack(anchor=tk.W)
+            self.checkboxes.append(var)
+        
+        # Add completion button
+        self.complete_btn = ModernButton(
+            main_frame,
+            text="Complete Checklist",
+            command=self.check_completion
+        )
+        self.complete_btn.pack(pady=20)
+        
+        # Status label
+        self.status_label = ttk.Label(
+            main_frame,
+            text="",
+            font=('Helvetica', 10)
+        )
+        self.status_label.pack(pady=10)
+        
+        # Center window on screen
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f'{width}x{height}+{x}+{y}')
+        
+    def check_completion(self):
+        """Check if all items are completed"""
+        all_completed = all(var.get() for var in self.checkboxes)
+        if all_completed:
+            self.status_label.configure(
+                text="Checklist completed successfully!",
+                foreground="green"
+            )
+            self.complete_btn.configure(state=tk.DISABLED)
+            self.window.after(2000, self.window.destroy)
+        else:
+            self.status_label.configure(
+                text="Please complete all items before proceeding.",
+                foreground="red"
+            )
+
 class ROBD2GUI:
     def __init__(self, root):
         self.root = root
@@ -494,6 +612,14 @@ This software is not intended for clinical use or any other settings without pro
             state=tk.DISABLED
         )
         self.disconnect_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Pre-flight checklist button
+        checklist_btn = ModernButton(
+            control_frame,
+            text="Pre-flight Checklist",
+            command=lambda: ChecklistWindow(self.root)
+        )
+        checklist_btn.pack(side=tk.LEFT, padx=5)
         
         # Status display
         status_frame = ttk.LabelFrame(connection_frame, text="Connection Status", padding=10)
