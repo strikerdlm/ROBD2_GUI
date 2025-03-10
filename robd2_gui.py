@@ -239,13 +239,13 @@ class ChecklistWindow:
             frame.pack(fill=tk.X, pady=5)
             
             var = tk.BooleanVar()
-            checkbox = ttk.Checkbutton(
-                frame,
-                text=item,
-                variable=var,
-                wraplength=700
-            )
-            checkbox.pack(anchor=tk.W)
+            checkbox = ttk.Checkbutton(frame, variable=var)
+            checkbox.pack(side=tk.LEFT, padx=(0, 5))
+            
+            # Create label for wrapped text
+            label = ttk.Label(frame, text=item, wraplength=700, justify=tk.LEFT)
+            label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            
             self.checkboxes.append(var)
         
         # Add completion button
@@ -343,43 +343,60 @@ class ROBD2GUI:
         about_frame = ModernFrame(self.notebook)
         self.notebook.add(about_frame, text="About")
         
-        # Create main content frame
+        # Create main content frame with padding
         content_frame = ModernFrame(about_frame)
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
         
-        # Title
+        # Title with custom styling
+        title_frame = ttk.Frame(content_frame)
+        title_frame.pack(fill=tk.X, pady=(0, 30))
+        
         title_label = ttk.Label(
-            content_frame,
+            title_frame,
             text="ROBD2 Diagnostic Interface",
-            font=('Helvetica', 16, 'bold')
+            font=('Helvetica', 24, 'bold')
         )
-        title_label.pack(pady=(0, 20))
+        title_label.pack()
         
-        # Version
-        version_label = ttk.Label(
-            content_frame,
-            text="Version 1.0.0",
+        subtitle_label = ttk.Label(
+            title_frame,
+            text="A Comprehensive Tool for ROBD2 Device Management",
             font=('Helvetica', 12)
         )
-        version_label.pack(pady=(0, 20))
+        subtitle_label.pack(pady=(5, 0))
         
-        # Description
+        # Version with custom styling
+        version_frame = ttk.Frame(content_frame)
+        version_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        version_label = ttk.Label(
+            version_frame,
+            text="Version 1.0.0",
+            font=('Helvetica', 14, 'bold')
+        )
+        version_label.pack()
+        
+        # Description with custom styling
+        description_frame = ModernLabelFrame(content_frame, text="Overview", padding=15)
+        description_frame.pack(fill=tk.X, pady=(0, 30))
+        
         description_text = """
 The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
 
 This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
 """
         description_label = ttk.Label(
-            content_frame,
+            description_frame,
             text=description_text,
-            wraplength=600,
-            justify=tk.CENTER
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
         )
-        description_label.pack(pady=(0, 20))
+        description_label.pack()
         
-        # Features
-        features_frame = ModernLabelFrame(content_frame, text="Features", padding=10)
-        features_frame.pack(fill=tk.X, pady=(0, 20))
+        # Features with custom styling
+        features_frame = ModernLabelFrame(content_frame, text="Key Features", padding=15)
+        features_frame.pack(fill=tk.X, pady=(0, 30))
         
         features_text = """
 • Real-time data visualization with customizable time scales
@@ -394,14 +411,15 @@ This software is EXPERIMENTAL and should only be used in controlled environments
         features_label = ttk.Label(
             features_frame,
             text=features_text,
-            wraplength=600,
-            justify=tk.LEFT
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
         )
         features_label.pack()
         
-        # Requirements
-        requirements_frame = ModernLabelFrame(content_frame, text="Requirements", padding=10)
-        requirements_frame.pack(fill=tk.X, pady=(0, 20))
+        # Requirements with custom styling
+        requirements_frame = ModernLabelFrame(content_frame, text="System Requirements", padding=15)
+        requirements_frame.pack(fill=tk.X, pady=(0, 30))
         
         requirements_text = """
 • Python 3.8 or higher
@@ -415,17 +433,24 @@ This software is EXPERIMENTAL and should only be used in controlled environments
         requirements_label = ttk.Label(
             requirements_frame,
             text=requirements_text,
-            wraplength=600,
-            justify=tk.LEFT
+            wraplength=700,
+            justify=tk.LEFT,
+            font=('Helvetica', 11)
         )
         requirements_label.pack()
         
-        # Author information
-        author_frame = ModernLabelFrame(content_frame, text="Author", padding=10)
-        author_frame.pack(fill=tk.X, pady=(0, 20))
+        # Author information with custom styling
+        author_frame = ModernLabelFrame(content_frame, text="Author", padding=15)
+        author_frame.pack(fill=tk.X, pady=(0, 30))
         
         author_text = """
 Diego Malpica MD
+Aerospace Medicine
+Aerospace Physiology Instructor
+Aerospace Scientific Department
+Aerospace Medicine Directorate
+Colombian Aerospace Force
+
 Initial work - [strikerdlm](https://github.com/strikerdlm)
 
 Copyright © 2025 Diego Malpica MD. All rights reserved.
@@ -433,13 +458,14 @@ Copyright © 2025 Diego Malpica MD. All rights reserved.
         author_label = ttk.Label(
             author_frame,
             text=author_text,
-            wraplength=600,
-            justify=tk.CENTER
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
         )
         author_label.pack()
         
-        # Disclaimer
-        disclaimer_frame = ModernLabelFrame(content_frame, text="Disclaimer", padding=10)
+        # Disclaimer with custom styling
+        disclaimer_frame = ModernLabelFrame(content_frame, text="Disclaimer", padding=15)
         disclaimer_frame.pack(fill=tk.X)
         
         disclaimer_text = """
@@ -450,8 +476,9 @@ This software is not intended for clinical use or any other settings without pro
         disclaimer_label = ttk.Label(
             disclaimer_frame,
             text=disclaimer_text,
-            wraplength=600,
-            justify=tk.CENTER
+            wraplength=700,
+            justify=tk.CENTER,
+            font=('Helvetica', 11)
         )
         disclaimer_label.pack()
 
