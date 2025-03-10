@@ -201,6 +201,7 @@ class ROBD2GUI:
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
         # Create tabs
+        self.create_about_tab()
         self.create_dashboard_tab()
         self.create_connection_tab()
         self.create_calibration_tab()
@@ -218,6 +219,123 @@ class ROBD2GUI:
         
         # Start plot updates
         self.root.after(1000, self.update_plots)
+
+    def create_about_tab(self):
+        """Create the About tab with project information"""
+        about_frame = ModernFrame(self.notebook)
+        self.notebook.add(about_frame, text="About")
+        
+        # Create main content frame
+        content_frame = ModernFrame(about_frame)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(
+            content_frame,
+            text="ROBD2 Diagnostic Interface",
+            font=('Helvetica', 16, 'bold')
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Version
+        version_label = ttk.Label(
+            content_frame,
+            text="Version 1.0.0",
+            font=('Helvetica', 12)
+        )
+        version_label.pack(pady=(0, 20))
+        
+        # Description
+        description_text = """
+The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
+
+This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
+"""
+        description_label = ttk.Label(
+            content_frame,
+            text=description_text,
+            wraplength=600,
+            justify=tk.CENTER
+        )
+        description_label.pack(pady=(0, 20))
+        
+        # Features
+        features_frame = ModernLabelFrame(content_frame, text="Features", padding=10)
+        features_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        features_text = """
+• Real-time data visualization with customizable time scales
+• Comprehensive data logging and export capabilities
+• Device calibration tools
+• Performance monitoring
+• Diagnostic command interface
+• Modern, intuitive user interface
+• Automatic data validation and range checking
+• CSV data export with timestamps
+"""
+        features_label = ttk.Label(
+            features_frame,
+            text=features_text,
+            wraplength=600,
+            justify=tk.LEFT
+        )
+        features_label.pack()
+        
+        # Requirements
+        requirements_frame = ModernLabelFrame(content_frame, text="Requirements", padding=10)
+        requirements_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        requirements_text = """
+• Python 3.8 or higher
+• Windows 10 or higher
+• Required Python packages:
+  - pyserial
+  - rich
+  - matplotlib
+  - numpy
+"""
+        requirements_label = ttk.Label(
+            requirements_frame,
+            text=requirements_text,
+            wraplength=600,
+            justify=tk.LEFT
+        )
+        requirements_label.pack()
+        
+        # Author information
+        author_frame = ModernLabelFrame(content_frame, text="Author", padding=10)
+        author_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        author_text = """
+Diego Malpica MD
+Initial work - [strikerdlm](https://github.com/strikerdlm)
+
+Copyright © 2025 Diego Malpica MD. All rights reserved.
+"""
+        author_label = ttk.Label(
+            author_frame,
+            text=author_text,
+            wraplength=600,
+            justify=tk.CENTER
+        )
+        author_label.pack()
+        
+        # Disclaimer
+        disclaimer_frame = ModernLabelFrame(content_frame, text="Disclaimer", padding=10)
+        disclaimer_frame.pack(fill=tk.X)
+        
+        disclaimer_text = """
+This software is provided "as is" without any warranties, express or implied. The authors and developers are not responsible for any damages or injuries that may occur from the use of this software.
+
+This software is not intended for clinical use or any other settings without proper medical supervision.
+"""
+        disclaimer_label = ttk.Label(
+            disclaimer_frame,
+            text=disclaimer_text,
+            wraplength=600,
+            justify=tk.CENTER
+        )
+        disclaimer_label.pack()
 
     def create_dashboard_tab(self):
         """Create the dashboard tab with real-time plots"""
