@@ -4,11 +4,12 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
-from rich.console import Console
-from rich.logging import RichHandler
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
+import csv
+import time
+import threading
 
 from data_store import DataStore
 from modern_widgets import ModernFrame, ModernButton, ModernLabelFrame
@@ -17,47 +18,50 @@ from serial_comm import SerialCommunicator
 from calibration_data import CalibrationMonitor
 from Performance import PerformanceMonitor
 from COM_serial import DataLogger
+from program_manager import ProgramManager
+from performance_gui import PerformanceTab
 
-# Configure logging
+# Configure standard logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True)]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 log = logging.getLogger("robd2_gui")
 
 class ROBD2GUI:
     def __init__(self, root):
+        """Initialize the GUI"""
         self.root = root
-        self.root.title("ROBD2 Diagnostic UI by Diego Malpica")
+        self.root.title("ROBD2 Control Interface")
         self.root.geometry("1200x800")
+        self.root.minsize(800, 600)
         
-        # Initialize components
-        self.serial_comm = SerialCommunicator()
+        # Initialize data store
         self.data_store = DataStore()
-        self.plotting_active = False
         
-        # Create menu bar
+        # Initialize serial communicator
+        self.serial_comm = SerialCommunicator()
+        
+        # Create the main frame
+        main_frame = ModernFrame(root)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create the notebook for tabs
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create the menu bar
         self.create_menu_bar()
         
-        # Create main container
-        self.main_container = ModernFrame(root)
-        self.main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Create the status bar
+        status_frame = ttk.Frame(main_frame, relief=tk.SUNKEN)
+        status_frame.pack(fill=tk.X, side=tk.BOTTOM)
         
-        # Create status bar
-        self.status_bar = ttk.Label(
-            self.main_container,
-            text="Not Connected",
-            font=('Helvetica', 10)
-        )
-        self.status_bar.pack(fill=tk.X, pady=(0, 10))
+        self.status_bar = ttk.Label(status_frame, text="Not connected", anchor=tk.W)
+        self.status_bar.pack(fill=tk.X, side=tk.LEFT, padx=5)
         
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(self.main_container)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # Create tabs in specified order
+        # Create tabs
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
@@ -67,11 +71,14 @@ class ROBD2GUI:
         self.create_programming_tab()
         self.create_logging_tab()
         
-        # Add keyboard shortcuts
+        # Add tab selection callback to handle starting/stopping data collection
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        
+        # Setup keyboard shortcuts
         self.add_keyboard_shortcuts()
         
-        # Start plot updates
-        self.root.after(1000, self.update_plots)
+        # Flag for plotting
+        self.plotting_active = False
         
     def create_menu_bar(self):
         """Create the menu bar"""
@@ -145,6 +152,10 @@ class ROBD2GUI:
                 # Update status
                 self.status_bar.configure(text=f"Connected to {port}")
                 self.status_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Connected to {port}\n")
+                
+                # Check if dashboard tab is visible and start data collection
+                if self.notebook.tab(self.notebook.select(), "text") == "Dashboard":
+                    self.start_data_collection()
             else:
                 messagebox.showerror("Connection Error", message)
                 self.status_bar.configure(text="Connection Failed")
@@ -152,7 +163,7 @@ class ROBD2GUI:
             
             # Destroy loading indicator
             loading.destroy()
-            
+                
         except Exception as e:
             log.error(f"Unexpected connection error: {e}", exc_info=True)
             messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
@@ -178,6 +189,9 @@ class ROBD2GUI:
             # Update status
             self.status_bar.configure(text="Disconnected")
             self.status_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Disconnected\n")
+            
+            # Stop data collection if active
+            self.plotting_active = False
         else:
             messagebox.showerror("Error", message)
             
@@ -784,18 +798,26 @@ For more information, please refer to the ROBD2 Technical Manual.
             # Update plot limits
             time_scale = float(self.time_scale_var.get())
             if time_data:
-                self.altitude_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
-                self.o2_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
-                self.vitals_ax.set_xlim(max(0, time_data[-1] - time_scale), time_data[-1])
+                self.altitude_ax.set_xlim(max(0, time_data[-1] - time_scale), max(time_data[-1], time_scale))
+                self.o2_ax.set_xlim(max(0, time_data[-1] - time_scale), max(time_data[-1], time_scale))
+                self.vitals_ax.set_xlim(max(0, time_data[-1] - time_scale), max(time_data[-1], time_scale))
+                
+                # Update y-axis limits based on data
+                if altitude_data:
+                    self.altitude_ax.set_ylim(0, max(35000, max(altitude_data) * 1.1))
+                if o2_data:
+                    self.o2_ax.set_ylim(0, max(30, max(o2_data) * 1.1))
+                if spo2_data:
+                    max_vitals = max(max(spo2_data) if spo2_data else 100, 
+                                   max(pulse_data) if pulse_data else 100,
+                                   max(blp_data) if blp_data else 10)
+                    self.vitals_ax.set_ylim(0, max_vitals * 1.1)
             
             # Redraw canvas
             self.canvas.draw()
             
         except Exception as e:
             log.error(f"Error updating plots: {e}", exc_info=True)
-            
-        # Schedule next update
-        self.root.after(1000, self.update_plots)
 
     def create_connection_tab(self):
         """Create the connection tab"""
@@ -851,7 +873,7 @@ For more information, please refer to the ROBD2 Technical Manual.
         checklist_btn.pack(pady=5)
 
     def create_calibration_tab(self):
-        """Create the calibration tab"""
+        """Create the calibration tab with self-calibration functionality"""
         calibration_frame = ModernFrame(self.notebook)
         self.notebook.add(calibration_frame, text="Calibration")
         
@@ -860,11 +882,11 @@ For more information, please refer to the ROBD2 Technical Manual.
         warning_frame.pack(fill=tk.X, padx=10, pady=5)
         
         warning_text = """
-Before starting calibration recording:
+Before starting calibration:
 1. Enable administrative credentials on the ROBD2
-2. Manually bypass the self-test
-3. Run program #20 to start the tests
-4. Ensure all gas connections are properly set up
+2. Manually bypass the self-test if required
+3. Ensure all gas connections are properly set up
+4. For manual calibration, run program #20 to start the tests
 """
         warning_label = ttk.Label(
             warning_frame,
@@ -875,31 +897,453 @@ Before starting calibration recording:
         )
         warning_label.pack(pady=5)
         
+        # Status indicator frame
+        self.calibration_status_frame = ModernLabelFrame(calibration_frame, text="Calibration Status", padding=10)
+        self.calibration_status_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.status_var = tk.StringVar(value="Ready for calibration")
+        self.status_label = ttk.Label(
+            self.calibration_status_frame,
+            textvariable=self.status_var,
+            font=('Helvetica', 10, 'bold'),
+            foreground='blue'
+        )
+        self.status_label.pack(pady=5)
+        
+        # Progress bar
+        self.calibration_progress = ttk.Progressbar(
+            self.calibration_status_frame,
+            orient=tk.HORIZONTAL,
+            length=300,
+            mode='determinate'
+        )
+        self.calibration_progress.pack(pady=5, fill=tk.X)
+        
         # Device selection
         device_frame = ModernLabelFrame(calibration_frame, text="Device Selection", padding=10)
         device_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        self.device_var = tk.StringVar()
-        device_combo = ttk.Combobox(device_frame, textvariable=self.device_var)
+        ttk.Label(device_frame, text="ROBD2 Device ID:").pack(side=tk.LEFT, padx=5)
+        self.device_var = tk.StringVar(value="9515")
+        device_combo = ttk.Combobox(device_frame, textvariable=self.device_var, width=10)
         device_combo.pack(side=tk.LEFT, padx=5)
-        device_combo['values'] = ['Device 1', 'Device 2', 'Device 3']
+        device_combo['values'] = ['9515', '9516', '9471']
+        
+        # Self-calibration section
+        self_cal_frame = ModernLabelFrame(calibration_frame, text="Self-Calibration", padding=10)
+        self_cal_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Room air and 100% O2 values display
+        values_frame = ttk.Frame(self_cal_frame)
+        values_frame.pack(fill=tk.X, pady=5)
+        
+        # Room air calibration
+        room_air_frame = ttk.LabelFrame(values_frame, text="Room Air (21% O2)")
+        room_air_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        ttk.Label(room_air_frame, text="ADC Voltage (V):").grid(row=0, column=0, padx=5, pady=2, sticky="w")
+        self.room_air_voltage_var = tk.StringVar(value="---")
+        ttk.Label(room_air_frame, textvariable=self.room_air_voltage_var).grid(row=0, column=1, padx=5, pady=2, sticky="w")
+        
+        ttk.Label(room_air_frame, text="O2 Concentration (%):").grid(row=1, column=0, padx=5, pady=2, sticky="w")
+        self.room_air_o2_var = tk.StringVar(value="---")
+        ttk.Label(room_air_frame, textvariable=self.room_air_o2_var).grid(row=1, column=1, padx=5, pady=2, sticky="w")
+        
+        self.record_room_air_btn = ModernButton(
+            room_air_frame, 
+            text="Record Room Air", 
+            command=self.record_room_air_calibration,
+            width=18
+        )
+        self.record_room_air_btn.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+        
+        # 100% O2 calibration
+        pure_o2_frame = ttk.LabelFrame(values_frame, text="100% O2")
+        pure_o2_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        ttk.Label(pure_o2_frame, text="ADC Voltage (V):").grid(row=0, column=0, padx=5, pady=2, sticky="w")
+        self.pure_o2_voltage_var = tk.StringVar(value="---")
+        ttk.Label(pure_o2_frame, textvariable=self.pure_o2_voltage_var).grid(row=0, column=1, padx=5, pady=2, sticky="w")
+        
+        ttk.Label(pure_o2_frame, text="O2 Concentration (%):").grid(row=1, column=0, padx=5, pady=2, sticky="w")
+        self.pure_o2_o2_var = tk.StringVar(value="---")
+        ttk.Label(pure_o2_frame, textvariable=self.pure_o2_o2_var).grid(row=1, column=1, padx=5, pady=2, sticky="w")
+        
+        self.record_pure_o2_btn = ModernButton(
+            pure_o2_frame, 
+            text="Record 100% O2", 
+            command=self.record_pure_o2_calibration,
+            width=18
+        )
+        self.record_pure_o2_btn.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
         
         # Calibration controls
-        control_frame = ModernLabelFrame(calibration_frame, text="Calibration Controls", padding=10)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
+        control_frame = ttk.Frame(self_cal_frame)
+        control_frame.pack(fill=tk.X, pady=10)
         
-        self.start_calibration_btn = ModernButton(control_frame, text="Record Calibration", command=self.start_calibration_recording, state=tk.DISABLED)
+        # Save calibration button
+        self.save_calibration_btn = ModernButton(
+            control_frame, 
+            text="Save Calibration Values", 
+            command=self.save_calibration_values,
+            width=22,
+            state=tk.DISABLED
+        )
+        self.save_calibration_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Clear calibration button
+        self.clear_calibration_btn = ModernButton(
+            control_frame, 
+            text="Clear Calibration Values", 
+            command=self.clear_calibration_values,
+            width=22
+        )
+        self.clear_calibration_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Manual Calibration section
+        manual_cal_frame = ModernLabelFrame(calibration_frame, text="Manual Calibration Recording", padding=10)
+        manual_cal_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.start_calibration_btn = ModernButton(
+            manual_cal_frame, 
+            text="Record Full Calibration Sequence", 
+            command=self.start_calibration_recording, 
+            state=tk.DISABLED
+        )
         self.start_calibration_btn.pack(pady=5)
         
         # Results display
         results_frame = ModernLabelFrame(calibration_frame, text="Calibration Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        self.results_text = tk.Text(results_frame, height=10, wrap=tk.WORD)
+        # Add scrollbar to results text
+        results_scroll = ttk.Scrollbar(results_frame)
+        results_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.results_text = tk.Text(results_frame, height=10, wrap=tk.WORD, yscrollcommand=results_scroll.set)
         self.results_text.pack(fill=tk.BOTH, expand=True)
+        results_scroll.config(command=self.results_text.yview)
+        
+        # Store calibration data for sharing between methods
+        self.calibration_data = {
+            'room_air': {
+                'o2_values': [],
+                'voltage_values': []
+            },
+            'pure_o2': {
+                'o2_values': [],
+                'voltage_values': []
+            }
+        }
+        
+        # Initialize calibration in progress flag
+        self.calibration_in_progress = False
+        
+    def update_calibration_status(self, message, color='blue', progress=None):
+        """Update the calibration status indicator"""
+        self.status_var.set(message)
+        self.status_label.config(foreground=color)
+        
+        if progress is not None:
+            self.calibration_progress['value'] = progress
+        
+        self.root.update_idletasks()
+        
+    def update_calibration_ui_state(self, in_progress=False):
+        """Update UI state based on calibration progress"""
+        self.calibration_in_progress = in_progress
+        
+        # Set button states based on calibration progress
+        state = tk.DISABLED if in_progress else tk.NORMAL
+        self.record_room_air_btn.config(state=state)
+        self.record_pure_o2_btn.config(state=state)
+        self.clear_calibration_btn.config(state=state)
+        
+        # The save button should only be enabled if both values are recorded and not in progress
+        save_state = tk.NORMAL if (
+            not in_progress and 
+            self.room_air_voltage_var.get() != "---" and 
+            self.pure_o2_voltage_var.get() != "---"
+        ) else tk.DISABLED
+        self.save_calibration_btn.config(state=save_state)
+        
+        # Start calibration button state
+        self.start_calibration_btn.config(state=state if self.serial_comm.is_connected else tk.DISABLED)
+        
+        # Update progress bar
+        if in_progress:
+            self.calibration_progress.config(mode='indeterminate')
+            self.calibration_progress.start(10)
+        else:
+            self.calibration_progress.config(mode='determinate')
+            self.calibration_progress.stop()
+            self.calibration_progress['value'] = 0 if in_progress is False else 100
+        
+    def record_room_air_calibration(self):
+        """Record room air (21% O2) calibration values"""
+        if not self.serial_comm.is_connected:
+            messagebox.showerror("Error", "Not connected to device")
+            return
+            
+        try:
+            # Update UI state
+            self.update_calibration_status("Recording room air values...", "blue")
+            self.update_calibration_ui_state(in_progress=True)
+            
+            # Collect multiple samples to ensure stability
+            o2_values = []
+            voltage_values = []
+            
+            for i in range(5):
+                # Update progress
+                self.calibration_progress['value'] = (i + 1) * 20
+                self.root.update_idletasks()
+                
+                try:
+                    # Get O2 concentration
+                    response = self.serial_comm.send_command("GET RUN O2CONC")
+                    o2_conc = float(response.strip())
+                    o2_values.append(o2_conc)
+                    
+                    # Get ADC voltage
+                    response = self.serial_comm.send_command("GET ADC 12")
+                    voltage = float(response.strip())
+                    voltage_values.append(voltage)
+                    
+                    self.results_text.insert(tk.END, f"  Sample {i+1}: O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
+                    self.results_text.see(tk.END)
+                    time.sleep(0.5)
+                except Exception as e:
+                    log.error(f"Error collecting sample {i+1}: {e}")
+                    self.results_text.insert(tk.END, f"  Error in sample {i+1}: {str(e)}\n")
+                    self.results_text.see(tk.END)
+                    
+            # Calculate averages if we have data
+            if o2_values and voltage_values:
+                avg_o2 = sum(o2_values) / len(o2_values)
+                avg_voltage = sum(voltage_values) / len(voltage_values)
+                
+                # Update display
+                self.room_air_o2_var.set(f"{avg_o2:.2f}")
+                self.room_air_voltage_var.set(f"{avg_voltage:.3f}")
+                
+                # Store in shared data structure
+                self.calibration_data['room_air']['o2_values'] = o2_values
+                self.calibration_data['room_air']['voltage_values'] = voltage_values
+                
+                self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Room air values recorded: O2={avg_o2:.2f}%, Voltage={avg_voltage:.3f}V\n")
+                self.results_text.see(tk.END)
+                
+                # Update status to success
+                self.update_calibration_status("Room air calibration complete ✓", "green", 100)
+            else:
+                self.update_calibration_status("Room air calibration failed", "red", 0)
+                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n")
+                self.results_text.see(tk.END)
+                
+        except Exception as e:
+            log.error(f"Error in room air calibration: {e}", exc_info=True)
+            self.update_calibration_status(f"Error: {str(e)}", "red", 0)
+            self.results_text.insert(tk.END, f"Error: {str(e)}\n")
+            self.results_text.see(tk.END)
+            
+        finally:
+            # Restore UI state
+            self.update_calibration_ui_state(in_progress=False)
+            
+    def record_pure_o2_calibration(self):
+        """Record 100% O2 calibration values"""
+        if not self.serial_comm.is_connected:
+            messagebox.showerror("Error", "Not connected to device")
+            return
+            
+        try:
+            # Update UI state
+            self.update_calibration_status("Recording 100% O2 values...", "blue")
+            self.update_calibration_ui_state(in_progress=True)
+            
+            # Collect multiple samples to ensure stability
+            o2_values = []
+            voltage_values = []
+            
+            for i in range(5):
+                # Update progress
+                self.calibration_progress['value'] = (i + 1) * 20
+                self.root.update_idletasks()
+                
+                try:
+                    # Get O2 concentration
+                    response = self.serial_comm.send_command("GET RUN O2CONC")
+                    o2_conc = float(response.strip())
+                    o2_values.append(o2_conc)
+                    
+                    # Get ADC voltage
+                    response = self.serial_comm.send_command("GET ADC 12")
+                    voltage = float(response.strip())
+                    voltage_values.append(voltage)
+                    
+                    self.results_text.insert(tk.END, f"  Sample {i+1}: O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
+                    self.results_text.see(tk.END)
+                    time.sleep(0.5)
+                except Exception as e:
+                    log.error(f"Error collecting sample {i+1}: {e}")
+                    self.results_text.insert(tk.END, f"  Error in sample {i+1}: {str(e)}\n")
+                    self.results_text.see(tk.END)
+                    
+            # Calculate averages if we have data
+            if o2_values and voltage_values:
+                avg_o2 = sum(o2_values) / len(o2_values)
+                avg_voltage = sum(voltage_values) / len(voltage_values)
+                
+                # Update display
+                self.pure_o2_o2_var.set(f"{avg_o2:.2f}")
+                self.pure_o2_voltage_var.set(f"{avg_voltage:.3f}")
+                
+                # Store in shared data structure
+                self.calibration_data['pure_o2']['o2_values'] = o2_values
+                self.calibration_data['pure_o2']['voltage_values'] = voltage_values
+                
+                self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - 100% O2 values recorded: O2={avg_o2:.2f}%, Voltage={avg_voltage:.3f}V\n")
+                self.results_text.see(tk.END)
+                
+                # Update status to success
+                self.update_calibration_status("100% O2 calibration complete ✓", "green", 100)
+            else:
+                self.update_calibration_status("100% O2 calibration failed", "red", 0)
+                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n")
+                self.results_text.see(tk.END)
+                
+        except Exception as e:
+            log.error(f"Error in 100% O2 calibration: {e}", exc_info=True)
+            self.update_calibration_status(f"Error: {str(e)}", "red", 0)
+            self.results_text.insert(tk.END, f"Error: {str(e)}\n")
+            self.results_text.see(tk.END)
+            
+        finally:
+            # Restore UI state
+            self.update_calibration_ui_state(in_progress=False)
+            
+    def save_calibration_values(self):
+        """Save calibration values to the ROBD2 device and to a file"""
+        if not self.serial_comm.is_connected:
+            messagebox.showerror("Error", "Not connected to device")
+            return
+            
+        try:
+            # Update UI state
+            self.update_calibration_status("Saving calibration values...", "blue")
+            self.update_calibration_ui_state(in_progress=True)
+            
+            device_id = self.device_var.get()
+            room_air_voltage = float(self.room_air_voltage_var.get())
+            pure_o2_voltage = float(self.pure_o2_voltage_var.get())
+            
+            # Send calibration values to the device
+            # Note: This is where you would normally send the calibration commands
+            # to the ROBD2 device. Since the exact command format isn't provided,
+            # we're just simulating this with a message
+            
+            self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Saving calibration values to ROBD2-{device_id}...\n")
+            self.results_text.see(tk.END)
+            
+            # Create logs directory if it doesn't exist
+            logs_dir = Path("calibration_logs")
+            logs_dir.mkdir(exist_ok=True)
+            
+            # Create calibration log file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = logs_dir / f"ROBD2_{device_id}_{timestamp}_cal.csv"
+            
+            # Get device info
+            device_info = self.serial_comm.send_command("GET INFO")
+            
+            # Update progress
+            self.calibration_progress['value'] = 50
+            self.root.update_idletasks()
+            
+            # Write calibration data to file
+            with open(log_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Device ID", "Device Info", "Timestamp", "Parameter", "Value"])
+                writer.writerow([device_id, device_info, timestamp, "Room Air Voltage", f"{room_air_voltage:.3f}"])
+                writer.writerow([device_id, device_info, timestamp, "100% O2 Voltage", f"{pure_o2_voltage:.3f}"])
+                writer.writerow([device_id, device_info, timestamp, "Room Air O2", self.room_air_o2_var.get()])
+                writer.writerow([device_id, device_info, timestamp, "100% O2", self.pure_o2_o2_var.get()])
+                
+                # Add individual sample data
+                writer.writerow([])
+                writer.writerow(["Detailed Samples"])
+                writer.writerow(["Type", "Sample #", "O2 Concentration", "ADC Voltage"])
+                
+                # Write room air samples
+                for i, (o2, voltage) in enumerate(zip(
+                    self.calibration_data['room_air']['o2_values'],
+                    self.calibration_data['room_air']['voltage_values']
+                )):
+                    writer.writerow(["Room Air", i+1, f"{o2:.2f}", f"{voltage:.3f}"])
+                    
+                # Write 100% O2 samples
+                for i, (o2, voltage) in enumerate(zip(
+                    self.calibration_data['pure_o2']['o2_values'],
+                    self.calibration_data['pure_o2']['voltage_values']
+                )):
+                    writer.writerow(["100% O2", i+1, f"{o2:.2f}", f"{voltage:.3f}"])
+            
+            # Update progress
+            self.calibration_progress['value'] = 100
+            self.root.update_idletasks()
+            
+            # Display success message
+            msg = f"Calibration values saved to {log_file}"
+            self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - {msg}\n")
+            self.results_text.see(tk.END)
+            
+            # Show success dialog
+            messagebox.showinfo("Calibration Saved", f"Calibration values have been successfully saved.\n\nFile: {log_file}")
+            
+            # Update status
+            self.update_calibration_status("Calibration successfully saved ✓", "green", 100)
+            
+        except Exception as e:
+            log.error(f"Error saving calibration: {e}", exc_info=True)
+            self.update_calibration_status(f"Error saving calibration: {str(e)}", "red", 0)
+            self.results_text.insert(tk.END, f"Error saving calibration: {str(e)}\n")
+            messagebox.showerror("Error", f"Failed to save calibration: {str(e)}")
+            
+        finally:
+            # Restore UI state
+            self.update_calibration_ui_state(in_progress=False)
+            
+    def clear_calibration_values(self):
+        """Clear the recorded calibration values"""
+        # Clear display values
+        self.room_air_voltage_var.set("---")
+        self.room_air_o2_var.set("---")
+        self.pure_o2_voltage_var.set("---")
+        self.pure_o2_o2_var.set("---")
+        
+        # Clear stored data
+        self.calibration_data = {
+            'room_air': {
+                'o2_values': [],
+                'voltage_values': []
+            },
+            'pure_o2': {
+                'o2_values': [],
+                'voltage_values': []
+            }
+        }
+        
+        # Update button states
+        self.save_calibration_btn.config(state=tk.DISABLED)
+        
+        # Update status
+        self.update_calibration_status("Calibration values cleared", "blue", 0)
+        self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Calibration values cleared\n")
+        self.results_text.see(tk.END)
         
     def start_calibration_recording(self):
-        """Start recording calibration data"""
+        """Start recording full calibration sequence data"""
         if not self.serial_comm.is_connected:
             messagebox.showerror("Error", "Not connected to device")
             return
@@ -924,7 +1368,14 @@ Do you want to proceed with recording calibration data?
             
         try:
             # Update UI state
-            self.start_calibration_btn.configure(state=tk.DISABLED)
+            self.update_calibration_status("Starting full calibration sequence...", "blue")
+            self.update_calibration_ui_state(in_progress=True)
+            
+            # Disable all buttons during full calibration
+            self.record_room_air_btn.config(state=tk.DISABLED)
+            self.record_pure_o2_btn.config(state=tk.DISABLED)
+            self.save_calibration_btn.config(state=tk.DISABLED)
+            self.clear_calibration_btn.config(state=tk.DISABLED)
             
             # Create logs directory if it doesn't exist
             logs_dir = Path("logs")
@@ -963,6 +1414,10 @@ Do you want to proceed with recording calibration data?
                                 'error_percent': data.get('error_percent', 0)
                             })
                             
+                            # Update progress
+                            progress_value = min(100, int(self.calibration_progress['value'] + 1))
+                            self.root.after(0, lambda: self.calibration_progress.config(value=progress_value))
+                            
                             # Update results display
                             self.root.after(0, lambda: self.results_text.insert(tk.END, 
                                 f"{timestamp.strftime('%H:%M:%S')} - Altitude: {data.get('altitude', 0)}ft, "
@@ -978,233 +1433,310 @@ Do you want to proceed with recording calibration data?
                     # Start monitoring
                     monitor.start_calibration()
                     
+                    # Update UI when done
+                    self.root.after(0, lambda: self.update_calibration_status("Full calibration complete ✓", "green", 100))
+                    self.root.after(0, lambda: self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Full calibration sequence completed\n"))
+                    self.root.after(0, lambda: self.results_text.see(tk.END))
+                    self.root.after(0, lambda: messagebox.showinfo("Calibration Complete", f"Full calibration sequence completed successfully.\n\nLog file: {log_file}"))
+                    
                 except Exception as e:
                     log.error(f"Error in calibration thread: {e}", exc_info=True)
+                    self.root.after(0, lambda: self.update_calibration_status(f"Calibration error: {str(e)}", "red", 0))
                     self.root.after(0, lambda: messagebox.showerror("Error", f"Calibration error: {str(e)}"))
-                    self.root.after(0, lambda: self.start_calibration_btn.configure(state=tk.NORMAL))
+                
+                finally:
+                    # Clean up
+                    log.removeHandler(file_handler)
+                    file_handler.close()
+                    
+                    # Restore UI state
+                    self.root.after(0, lambda: self.update_calibration_ui_state(in_progress=False))
             
             threading.Thread(target=run_calibration, daemon=True).start()
             
         except Exception as e:
             log.error(f"Error starting calibration recording: {e}", exc_info=True)
+            self.update_calibration_status(f"Error: {str(e)}", "red", 0)
             messagebox.showerror("Error", f"Failed to start calibration recording: {str(e)}")
-            self.start_calibration_btn.configure(state=tk.NORMAL)
+            
+            # Restore UI state
+            self.update_calibration_ui_state(in_progress=False)
 
     def create_performance_tab(self):
-        """Create the performance monitoring tab"""
-        performance_frame = ModernFrame(self.notebook)
-        self.notebook.add(performance_frame, text="Performance")
-        
-        # Device selection
-        device_frame = ModernLabelFrame(performance_frame, text="Device Selection", padding=10)
-        device_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.perf_device_var = tk.StringVar()
-        device_combo = ttk.Combobox(device_frame, textvariable=self.perf_device_var)
-        device_combo.pack(side=tk.LEFT, padx=5)
-        device_combo['values'] = ['Device 1', 'Device 2', 'Device 3']
-        
-        # Monitoring controls
-        control_frame = ModernLabelFrame(performance_frame, text="Monitoring Controls", padding=10)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.start_performance_btn = ModernButton(control_frame, text="Start Monitoring", command=self.start_performance_monitoring, state=tk.DISABLED)
-        self.start_performance_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.stop_performance_btn = ModernButton(control_frame, text="Stop Monitoring", command=self.stop_performance_monitoring, state=tk.DISABLED)
-        self.stop_performance_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.export_btn = ModernButton(control_frame, text="Export Data", command=self.export_data, state=tk.DISABLED)
-        self.export_btn.pack(side=tk.LEFT, padx=5)
+        """Create the performance tab"""
+        performance_tab = PerformanceTab(self.notebook, self.serial_comm)
+        self.notebook.add(performance_tab, text="Performance")
 
     def create_training_tab(self):
-        """Create the training tab"""
+        """Create the training tab with simulation, checklists, and ROBD2 commands"""
         training_frame = ModernFrame(self.notebook)
         self.notebook.add(training_frame, text="Training")
         
-        # Training scripts section
-        scripts_frame = ModernLabelFrame(training_frame, text="Training Scripts", padding=10)
-        scripts_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Create a horizontal paned window
+        paned = ttk.PanedWindow(training_frame, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Fixed Wing Section
-        fixed_wing_frame = ModernLabelFrame(scripts_frame, text="Fixed Wing Training", padding=10)
-        fixed_wing_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Left side - ROBD2 Commands
+        command_frame = ModernLabelFrame(paned, text="ROBD2 Commands")
+        paned.add(command_frame, weight=1)
         
-        fixed_wing_spanish = ModernButton(
-            fixed_wing_frame, 
-            text="Fixed Wing (Spanish)", 
-            command=lambda: ScriptViewerWindow(
-                self.root, 
-                "Fixed Wing Training Script (Spanish)", 
-                """Libreto para instrucción de ROBD2 – Versión Español 
-
-Bienvenido al entrenamiento de hipoxia normobárica de la Dirección de Medicina Aeroespacial, este entrenamiento está diseñado para que usted reconozca los síntomas de hipoxia y realice los procedimientos de recuperación siguiendo la lista de chequeo PRICE revisada en clase.  Vamos a presentarle un escenario de simulación de vuelo en el PREPAR3D donde usted estará al mando y al control de una aeronave, estará a una altitud de 10.000 ft y yo le daré instrucciones específicas de los procedimientos que usted tiene que realizar en su aeronave. Es importante recordarle que esta no es una evaluación de destrezas de vuelo ni una simulación precisa de una aeronave en particular, sino que el entrenamiento está diseñado para que usted identifique de los efectos de la altitud sobre el rendimiento humano en cabina.  
-
-Como se revisó en clase, deberá reconocer los síntomas de hipoxia y, al aparecer, chequear PRICE y corregirlo con las tres palancas hacia arriba. Siguiendo las instrucciones del instructor. 
-
-Vamos a verificar en el siguiente orden el simulador:
-
-1. Acomodación en la silla (Ajuste abajo a la izquierda, distancia silla y control de mando)
-2. Ajustarse cinturón
-3. Realizar la adaptación de casco y máscara para que a orden del instructor se la ponga
-4. El instructor mostrará los pedales, el bastón de mando o joke, el cuadrante de la potencia
-5. Colocar oxímetro de pulso en la mano no dominante
-
-Instrucciones de vuelo:
-"TH250, Bogotá radar. Vire por derecha rumbo 130, ascienda y mantenga uno cinco mil pies con un régimen de 500 ft/min."
-
-Colación esperada:
-"Bogotá Radar, virando por derecha rumbo 130, ascendiendo y manteniendo uno cinco mil pies a 500 ft/min, TH250."
-
-Segunda instrucción:
-"TH250, Bogotá radar. Vire por derecha rumbo 210, ascienda y mantenga uno siete mil pies, a 500 ft/min"
-
-Procedimiento de visión nocturna:
-Durante la hipoxia, la disminución de oxígeno afecta significativamente la función de los conos en la retina. En condiciones de hipoxia, la capacidad de los conos para funcionar correctamente se reduce, afectando la sensibilidad a los colores y la agudeza visual.
-
-Instrucciones específicas:
-1. Presentar carta AD 2 SKGY - CHIA - FLAMINIO SUAREZ CAMACHO
-2. Ejecutar perfil para visión nocturna en ROBD2
-3. Identificar aeródromo y señalar montañas entre 8400 y 10200 ft
-4. Indicar secuencia de puntos en salida VFR hacia ECHO entre BIMA y TIBITOC
-5. Leer contenido de recuadros rojos
-6. Ejecutar "Oxygen Dump" y esperar un minuto para recuperación"""
+        # Command categories
+        status_frame = ModernLabelFrame(command_frame, text="Status Commands")
+        status_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Status commands
+        status_buttons = [
+            ("O2 Concentration", "GET RUN O2CONC"),
+            ("Breathing Loop Pressure", "GET RUN BLPRESS"),
+            ("SpO2 Reading", "GET RUN SPO2"),
+            ("Pulse Reading", "GET RUN PULSE"),
+            ("Current Altitude", "GET RUN ALT"),
+            ("Final Altitude", "GET RUN FINALALT"),
+            ("Elapsed Time", "GET RUN ELTIME"),
+            ("Remaining Time", "GET RUN REMTIME"),
+            ("All Run Data", "GET RUN ALL"),
+            ("System Info", "GET INFO"),
+            ("O2 Source Status", "GET O2 STATUS"),
+            ("System Status", "GET STATUS")
+        ]
+        
+        for i, (label, cmd) in enumerate(status_buttons):
+            row, col = divmod(i, 2)
+            btn = ModernButton(
+                status_frame, 
+                text=label,
+                command=lambda cmd=cmd: self.send_training_command(cmd),
+                width=20
             )
-        )
-        fixed_wing_spanish.pack(side=tk.LEFT, padx=5, pady=5)
+            btn.grid(row=row, column=col, padx=5, pady=2, sticky="w")
         
-        fixed_wing_english = ModernButton(
-            fixed_wing_frame, 
-            text="Fixed Wing (English)", 
-            command=lambda: ScriptViewerWindow(
-                self.root, 
-                "Fixed Wing Training Script (English)", 
-                """Welcome to the normobaric hypoxia training conducted by the Aerospace Medicine Directorate. This training is designed to help you recognize the symptoms of hypoxia and perform recovery procedures using the PRICE checklist reviewed in class. We will present you with a flight simulation scenario in PREPAR3D where you will be in command of an aircraft at an altitude of 10,000 ft.
-
-Simulator verification order:
-1. Seating adjustment
-2. Fastening seatbelts
-3. Helmet and mask adaptation
-4. Familiarization with controls (pedals, control stick/yoke, throttle quadrant)
-
-Flight Instructions:
-"TH250, Bogotá radar. Turn right heading 130, climb and maintain fifteen thousand feet at a rate of 500 ft/min."
-
-Expected readback:
-"Bogotá Radar, turning right heading 130, climbing and maintaining fifteen thousand feet at 500 ft/min, TH250."
-
-Second instruction:
-"TH250, Bogotá radar. Turn right heading 210, climb and maintain seventeen thousand feet."
-
-Night Vision Training:
-During hypoxia, oxygen reduction significantly affects retinal cone function, responsible for color perception and visual acuity. This is particularly critical during night flights.
-
-Specific Instructions:
-1. Present AD 2 SKGY - CHIA - FLAMINIO SUAREZ CAMACHO chart
-2. Execute night vision profile in ROBD2
-3. Identify aerodrome and mountains between 8400-10200 ft
-4. State VFR departure sequence to ECHO between BIMA and TIBITOC
-5. Read red box content
-6. Execute "Oxygen Dump" with one-minute recovery period"""
+        # Control commands
+        control_frame = ModernLabelFrame(command_frame, text="Control Commands")
+        control_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # First row - O2 Dump controls
+        dump_frame = ttk.Frame(control_frame)
+        dump_frame.pack(fill=tk.X, padx=5, pady=2)
+        
+        ttk.Label(dump_frame, text="O2 Dump Control:").pack(side=tk.LEFT, padx=5)
+        
+        dump_on_btn = ModernButton(
+            dump_frame,
+            text="O2 Dump ON",
+            command=lambda: self.send_training_command("SET O2DUMP 1"),
+            width=12
+        )
+        dump_on_btn.pack(side=tk.LEFT, padx=5)
+        
+        dump_off_btn = ModernButton(
+            dump_frame,
+            text="O2 Dump OFF",
+            command=lambda: self.send_training_command("SET O2DUMP 0"),
+            width=12
+        )
+        dump_off_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Second row - O2 Failure control
+        o2fail_btn = ModernButton(
+            control_frame,
+            text="Simulate O2 Failure",
+            command=lambda: self.send_training_command("RUN O2FAIL"),
+            width=20
+        )
+        o2fail_btn.pack(padx=5, pady=2)
+        
+        # Program control commands
+        program_frame = ModernLabelFrame(command_frame, text="Program Control")
+        program_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Program control buttons in grid layout
+        program_buttons = [
+            ("Enter Pilot Test Mode", "RUN READY"),
+            ("Exit Pilot Test Mode", "RUN EXIT"),
+            ("Advance to Next Step", "RUN NEXT"),
+            ("Abort Current Test", "RUN ABORT")
+        ]
+        
+        for i, (label, cmd) in enumerate(program_buttons):
+            row, col = divmod(i, 2)
+            btn = ModernButton(
+                program_frame, 
+                text=label,
+                command=lambda cmd=cmd: self.send_training_command(cmd),
+                width=20
             )
-        )
-        fixed_wing_english.pack(side=tk.LEFT, padx=5, pady=5)
+            btn.grid(row=row, column=col, padx=5, pady=2, sticky="w")
         
-        # Rotary Wing Section
-        rotary_wing_frame = ModernLabelFrame(scripts_frame, text="Rotary Wing Training", padding=10)
-        rotary_wing_frame.pack(fill=tk.X, padx=10, pady=5)
+        # PPT control commands
+        ppt_frame = ModernLabelFrame(command_frame, text="Positive Pressure Test")
+        ppt_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        rotary_wing_spanish = ModernButton(
-            rotary_wing_frame, 
-            text="Rotary Wing (Spanish)", 
-            command=lambda: ScriptViewerWindow(
-                self.root, 
-                "Rotary Wing Training Script (Spanish)", 
-                """Bienvenido al entrenamiento de hipoxia normobárica de la Dirección de Medicina Aeroespacial. Este entrenamiento está diseñado para que usted reconozca los síntomas de hipoxia y realice los procedimientos de recuperación siguiendo la lista de chequeo PRICE.
-
-Verificación del simulador:
-1. Acomodación en la silla
-2. Ajustar el cinturón
-3. Realizar la adaptación de casco y máscara
-4. El instructor mostrará los controles básicos
-
-Instrucciones de vuelo:
-"UH180, Bogotá radar. Vire por derecha rumbo 130, ascienda y mantenga uno tres mil pies."
-
-Colación esperada:
-"Bogotá Radar, virando por derecha rumbo 130, asciendo y manteniendo uno tres mil pies, UH180."
-
-Segunda instrucción:
-"UH180, Bogotá radar. Vire derecha rumbo 210, ascienda y mantenga uno siete mil pies"
-
-En caso de emergencia:
-El piloto debe comunicarse con CTA para declarar la emergencia y solicitar descenso para uno cero mil pies.
-
-Respuesta CTA:
-"UH180, Bogotá Radar, autorizado descenso a uno cero mil pies"
-
-Recordatorio importante:
-Al primer síntoma de hipoxia, hay que recuperarse accionando el regulador con las tres palancas hacia arriba."""
+        ppt_buttons = [
+            ("Enter PPT Mode", "RUN PPT IDLE"),
+            ("Start PPT", "RUN PPT START"),
+            ("Stop PPT", "RUN PPT STOP")
+        ]
+        
+        for i, (label, cmd) in enumerate(ppt_buttons):
+            btn = ModernButton(
+                ppt_frame, 
+                text=label,
+                command=lambda cmd=cmd: self.send_training_command(cmd),
+                width=20
             )
-        )
-        rotary_wing_spanish.pack(side=tk.LEFT, padx=5, pady=5)
+            btn.pack(padx=5, pady=2)
         
-        rotary_wing_english = ModernButton(
-            rotary_wing_frame, 
-            text="Rotary Wing (English)", 
-            command=lambda: ScriptViewerWindow(
-                self.root, 
-                "Rotary Wing Training Script (English)", 
-                """Welcome to the normobaric hypoxia training conducted by the Aerospace Medicine Directorate. This training is designed to help you recognize hypoxia symptoms and perform recovery procedures using the PRICE checklist.
-
-Simulator verification:
-1. Seating adjustment
-2. Fastening seatbelts
-3. Helmet and mask adaptation
-4. Basic controls familiarization
-
-Flight Instructions:
-"UH180, Bogotá radar. Turn right heading 130, climb and maintain thirteen thousand feet."
-
-Expected readback:
-"Bogotá Radar, turning right heading 130, climbing and maintaining thirteen thousand feet, UH180."
-
-Second instruction:
-"UH180, Bogotá radar. Turn right heading 210, climb and maintain seventeen thousand feet."
-
-Emergency Procedure:
-The pilot must communicate with ATC to declare emergency and request descent to ten thousand feet.
-
-ATC Response:
-"UH180, Bogotá Radar, cleared to descend to ten thousand feet."
-
-Important Reminder:
-Upon first symptom of hypoxia, recovery must be initiated by operating the regulator with all three levers up."""
-            )
-        )
-        rotary_wing_english.pack(side=tk.LEFT, padx=5, pady=5)
+        # Flight simulator commands
+        flsim_frame = ModernLabelFrame(command_frame, text="Flight Simulator")
+        flsim_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # Instructions frame
-        instructions_frame = ModernLabelFrame(training_frame, text="Instructions", padding=10)
-        instructions_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        instructions_text = """
-Select the appropriate training script based on aircraft type and language preference.
-Each script contains:
-• Detailed setup instructions
-• Flight commands and expected responses
-• Emergency procedures
-• Night vision training procedures (where applicable)
-• Important reminders for hypoxia symptoms
-"""
-        instructions_label = ttk.Label(
-            instructions_frame,
-            text=instructions_text,
-            wraplength=700,
-            justify=tk.LEFT,
-            font=('Helvetica', 10)
+        # Run Flight Sim button
+        flsim_btn = ModernButton(
+            flsim_frame,
+            text="Enter Flight Sim Mode",
+            command=lambda: self.send_training_command("RUN FLSIM"),
+            width=20
         )
-        instructions_label.pack(pady=5)
+        flsim_btn.pack(padx=5, pady=2)
+        
+        # Altitude entry
+        alt_frame = ttk.Frame(flsim_frame)
+        alt_frame.pack(fill=tk.X, padx=5, pady=2)
+        
+        ttk.Label(alt_frame, text="Set Altitude (ft):").pack(side=tk.LEFT, padx=5)
+        
+        self.flsim_alt_var = tk.StringVar()
+        alt_entry = ttk.Entry(alt_frame, textvariable=self.flsim_alt_var, width=10)
+        alt_entry.pack(side=tk.LEFT, padx=5)
+        
+        set_alt_btn = ModernButton(
+            alt_frame,
+            text="Set Altitude",
+            command=self.set_flsim_altitude,
+            width=12
+        )
+        set_alt_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Response display area
+        response_frame = ModernLabelFrame(command_frame, text="Command Responses")
+        response_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Text area for responses
+        self.training_response_text = tk.Text(response_frame, height=8, wrap=tk.WORD)
+        self.training_response_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        
+        # Scrollbar for text area
+        response_scrollbar = ttk.Scrollbar(response_frame, command=self.training_response_text.yview)
+        response_scrollbar.pack(fill=tk.Y, side=tk.RIGHT)
+        self.training_response_text.config(yscrollcommand=response_scrollbar.set)
+        
+        # Clear responses button
+        clear_btn = ModernButton(
+            response_frame,
+            text="Clear Responses",
+            command=lambda: self.training_response_text.delete(1.0, tk.END),
+            width=15
+        )
+        clear_btn.pack(pady=5)
+        
+        # Right side - Training materials
+        materials_frame = ModernLabelFrame(paned, text="Training Materials")
+        paned.add(materials_frame, weight=1)
+        
+        # Add training content
+        ttk.Label(
+            materials_frame,
+            text="ROBD2 Training Instructions",
+            font=("Arial", 12, "bold")
+        ).pack(padx=10, pady=5)
+        
+        instructions = """
+1. Before starting any training:
+   - Ensure the ROBD2 device is properly connected
+   - Verify O2 source pressure is adequate
+   - Check that breathing loop is properly installed
+
+2. Basic Training Procedure:
+   a. Enter Pilot Test Mode with "Enter Pilot Test Mode" button
+   b. Select and run a program or use Flight Sim mode
+   c. Monitor SpO2 and pulse rate during the session
+   d. Use O2 Dump in case of emergency or for demonstration
+
+3. Using Positive Pressure Test:
+   a. Enter PPT Mode with "Enter PPT Mode" button
+   b. Start the test with "Start PPT" button
+   c. Monitor breathing loop pressure
+   d. Stop the test with "Stop PPT" button
+
+4. Emergency Procedures:
+   - Activate O2 Dump ON for immediate oxygen
+   - Use "Abort Current Test" to stop any running program
+   - Exit Pilot Test Mode when session is complete
+
+5. Monitoring Vitals:
+   - Use SpO2 Reading and Pulse Reading commands
+   - Monitor O2 Concentration regularly
+   - Check breathing loop pressure
+        """
+        
+        instruction_text = tk.Text(materials_frame, wrap=tk.WORD, height=20)
+        instruction_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        instruction_text.insert(tk.END, instructions)
+        instruction_text.config(state=tk.DISABLED)
+        
+        # Checklist button
+        checklist_btn = ModernButton(
+            materials_frame,
+            text="Open Training Checklist",
+            command=lambda: ChecklistWindow(self.root, "Training Checklist", [
+                "Connect ROBD2 device",
+                "Verify O2 source pressure",
+                "Install breathing loop properly",
+                "Set up pulse oximeter",
+                "Configure desired training program",
+                "Brief trainee on emergency procedures",
+                "Enter Pilot Test Mode",
+                "Run selected program",
+                "Monitor vital signs throughout session",
+                "Conclude session with proper shutdown"
+            ])
+        )
+        checklist_btn.pack(pady=10)
+        
+        return training_frame
+        
+    def send_training_command(self, command):
+        """Send a command from the training tab and display the response"""
+        if not self.serial_comm.is_connected:
+            self.training_response_text.insert(tk.END, "Error: Device not connected\n")
+            return
+            
+        try:
+            # Send the command
+            response = self.serial_comm.send_command(command)
+            
+            # Display command and response
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.training_response_text.insert(tk.END, f"[{timestamp}] >> {command}\n")
+            self.training_response_text.insert(tk.END, f"[{timestamp}] << {response}\n\n")
+            self.training_response_text.see(tk.END)
+            
+        except Exception as e:
+            self.training_response_text.insert(tk.END, f"Error: {str(e)}\n")
+            
+    def set_flsim_altitude(self):
+        """Set flight simulator altitude"""
+        try:
+            altitude = int(self.flsim_alt_var.get())
+            if altitude < 0 or altitude > 34000:
+                self.training_response_text.insert(tk.END, "Error: Altitude must be between 0 and 34000 ft\n")
+                return
+                
+            command = f"SET FSALT {altitude}"
+            self.send_training_command(command)
+            
+        except ValueError:
+            self.training_response_text.insert(tk.END, "Error: Invalid altitude value\n")
 
     def create_dashboard_tab(self):
         """Create the dashboard tab"""
@@ -1218,6 +1750,26 @@ Each script contains:
         self.time_scale_var = tk.StringVar(value="60")
         ttk.Label(scale_frame, text="Time window (seconds):").pack(side=tk.LEFT, padx=5)
         ttk.Entry(scale_frame, textvariable=self.time_scale_var, width=10).pack(side=tk.LEFT, padx=5)
+        
+        # Data collection control
+        control_frame = ModernLabelFrame(dashboard_frame, text="Plot Controls", padding=10)
+        control_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        start_btn = ModernButton(
+            control_frame,
+            text="Start Plotting",
+            command=self.start_data_collection,
+            width=15
+        )
+        start_btn.pack(side=tk.LEFT, padx=5)
+        
+        stop_btn = ModernButton(
+            control_frame,
+            text="Stop Plotting",
+            command=self.stop_data_collection,
+            width=15
+        )
+        stop_btn.pack(side=tk.LEFT, padx=5)
         
         # Create plots
         plot_frame = ModernLabelFrame(dashboard_frame, text="Real-time Data", padding=10)
@@ -1235,63 +1787,233 @@ Each script contains:
         }
         
         # Create plot lines
-        self.altitude_line, = self.altitude_ax.plot([], [], label='Altitude')
-        self.o2_line, = self.o2_ax.plot([], [], label='O2 Concentration')
-        self.blp_line, = self.vitals_ax.plot([], [], label='BLP')
-        self.spo2_line, = self.vitals_ax.plot([], [], label='SpO2')
-        self.pulse_line, = self.vitals_ax.plot([], [], label='Pulse')
+        self.altitude_line, = self.altitude_ax.plot([], [], 'b-', label='Altitude')
+        self.o2_line, = self.o2_ax.plot([], [], 'g-', label='O2 Concentration')
+        self.blp_line, = self.vitals_ax.plot([], [], 'r-', label='BLP')
+        self.spo2_line, = self.vitals_ax.plot([], [], 'm-', label='SpO2')
+        self.pulse_line, = self.vitals_ax.plot([], [], 'c-', label='Pulse')
         
         # Configure plots
         self.altitude_ax.set_title('Altitude (ft)')
+        self.altitude_ax.set_ylabel('Altitude (ft)')
         self.o2_ax.set_title('O2 Concentration (%)')
+        self.o2_ax.set_ylabel('O2 (%)')
         self.vitals_ax.set_title('Vitals')
+        self.vitals_ax.set_ylabel('Value')
+        self.vitals_ax.set_xlabel('Time (s)')
         
         for ax in [self.altitude_ax, self.o2_ax, self.vitals_ax]:
             ax.grid(True)
             ax.legend()
-        
+            
         # Create canvas
         self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Add toolbar
+        toolbar_frame = ttk.Frame(plot_frame)
+        toolbar_frame.pack(fill=tk.X)
+        NavigationToolbar2Tk(self.canvas, toolbar_frame)
+        
+        return dashboard_frame
+        
+    def start_data_collection(self):
+        """Start collecting data at 1Hz for plots"""
+        if not self.serial_comm.is_connected:
+            messagebox.showerror("Error", "Please connect to the device first")
+            return
+            
+        # Clear existing data
+        self.data_store.clear()
+        self.plotting_active = True
+        
+        # Start data collection
+        self.collect_data_for_plots()
+        
+    def stop_data_collection(self):
+        """Stop collecting data for plots"""
+        self.plotting_active = False
+
+    def collect_data_for_plots(self):
+        """Collect data at 1Hz for plotting"""
+        if not self.serial_comm.is_connected or not self.plotting_active:
+            # Schedule next data collection
+            self.root.after(1000, self.collect_data_for_plots)
+            return
+            
+        try:
+            # Get current data from the device
+            response = self.serial_comm.send_command("GET RUN ALL")
+            data = response.strip().split(',')
+            
+            # Parse the data if valid
+            if len(data) >= 10:
+                # Format: timestamp, program, current_alt, final_alt, o2_conc, bl_pressure, elapsed_time, remaining_time, spo2, pulse
+                timestamp = datetime.now()
+                
+                # Get additional data for O2 voltage
+                o2_voltage = 0.0
+                try:
+                    o2_voltage_response = self.serial_comm.send_command("GET ADC 1")
+                    o2_voltage = float(o2_voltage_response.strip())
+                except:
+                    pass
+                
+                # Process the data
+                try:
+                    altitude = float(data[2])
+                    o2_conc = float(data[4])
+                    blp = float(data[5])
+                    spo2 = float(data[8])
+                    pulse = float(data[9])
+                    
+                    # Add data to data store
+                    self.data_store.add_data(timestamp, {
+                        'altitude': altitude,
+                        'o2_conc': o2_conc,
+                        'blp': blp,
+                        'spo2': spo2,
+                        'pulse': pulse,
+                        'o2_voltage': o2_voltage,
+                        'error_percent': 0.0  # Calculate if needed
+                    })
+                    
+                    # Trigger plot update
+                    self.update_plots()
+                    
+                except Exception as e:
+                    log.error(f"Error processing data: {e}")
+                    
+        except Exception as e:
+            log.error(f"Error collecting data: {e}")
+        
+        # Schedule next data collection (1Hz)
+        self.root.after(1000, self.collect_data_for_plots)
 
     def create_diagnostics_tab(self):
-        """Create the diagnostics tab"""
+        """Create the diagnostics tab with command buttons"""
         diagnostics_frame = ModernFrame(self.notebook)
         self.notebook.add(diagnostics_frame, text="Diagnostics")
         
-        # Command input
-        command_frame = ModernLabelFrame(diagnostics_frame, text="Send Command", padding=10)
-        command_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Command buttons section
+        commands_frame = ModernLabelFrame(diagnostics_frame, text="ROBD2 Commands", padding=10)
+        commands_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Create a scrollable frame for the commands
+        commands_canvas = tk.Canvas(commands_frame)
+        scrollbar = ttk.Scrollbar(commands_frame, orient="vertical", command=commands_canvas.yview)
+        scrollable_frame = ttk.Frame(commands_canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: commands_canvas.configure(scrollregion=commands_canvas.bbox("all"))
+        )
+        
+        commands_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        commands_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        commands_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Define the commands
+        diagnostic_commands = [
+            ("Get O2 Concentration", "GET RUN O2CONC"),
+            ("Get Breathing Loop Pressure", "GET RUN BLPRESS"),
+            ("Get SpO2 Reading", "GET RUN SPO2"),
+            ("Get Pulse Reading", "GET RUN PULSE"),
+            ("Get Current Altitude", "GET RUN ALT"),
+            ("Get Final Altitude", "GET RUN FINALALT"),
+            ("Get Elapsed Time", "GET RUN ELTIME"),
+            ("Get Remaining Time", "GET RUN REMTIME"),
+            ("Get All Run Data", "GET RUN ALL"),
+            ("Get System Info", "GET INFO"),
+            ("Get O2 Status", "GET O2 STATUS"),
+            ("Get System Status", "GET STATUS"),
+        ]
+        
+        # Create command buttons (2 columns)
+        for i, (label, command) in enumerate(diagnostic_commands):
+            row = i // 2
+            col = i % 2
+            cmd_btn = ModernButton(
+                scrollable_frame, 
+                text=label,
+                command=lambda cmd=command: self.send_diagnostic_command(cmd),
+                width=25
+            )
+            cmd_btn.grid(row=row, column=col, padx=5, pady=3, sticky="ew")
+        
+        # Special case for MFC flow rate which needs input
+        mfc_frame = ttk.Frame(scrollable_frame)
+        mfc_frame.grid(row=(len(diagnostic_commands) // 2) + 1, column=0, columnspan=1, padx=5, pady=5, sticky="ew")
+        
+        ttk.Label(mfc_frame, text="MFC Number:").pack(side=tk.LEFT, padx=5)
+        self.mfc_num_var = tk.StringVar()
+        mfc_entry = ttk.Entry(mfc_frame, textvariable=self.mfc_num_var, width=5)
+        mfc_entry.pack(side=tk.LEFT, padx=5)
+        
+        mfc_btn = ModernButton(
+            mfc_frame,
+            text="Get MFC Flow Rate",
+            command=lambda: self.send_diagnostic_command(f"GET MFC {self.mfc_num_var.get()}")
+        )
+        mfc_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Special case for ADC device voltage which needs input
+        adc_frame = ttk.Frame(scrollable_frame)
+        adc_frame.grid(row=(len(diagnostic_commands) // 2) + 1, column=1, columnspan=1, padx=5, pady=5, sticky="ew")
+        
+        ttk.Label(adc_frame, text="ADC Device:").pack(side=tk.LEFT, padx=5)
+        self.adc_num_var = tk.StringVar()
+        adc_entry = ttk.Entry(adc_frame, textvariable=self.adc_num_var, width=5)
+        adc_entry.pack(side=tk.LEFT, padx=5)
+        
+        adc_btn = ModernButton(
+            adc_frame,
+            text="Get ADC Voltage",
+            command=lambda: self.send_diagnostic_command(f"GET ADC {self.adc_num_var.get()}")
+        )
+        adc_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Custom command input
+        custom_frame = ModernLabelFrame(diagnostics_frame, text="Custom Command", padding=10)
+        custom_frame.pack(fill=tk.X, padx=10, pady=5)
         
         self.command_var = tk.StringVar()
-        command_entry = ttk.Entry(command_frame, textvariable=self.command_var)
+        command_entry = ttk.Entry(custom_frame, textvariable=self.command_var)
         command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
-        send_btn = ModernButton(command_frame, text="Send", command=lambda: self.send_diagnostic_command(self.command_var.get()))
+        send_btn = ModernButton(custom_frame, text="Send", command=lambda: self.send_diagnostic_command(self.command_var.get()))
         send_btn.pack(side=tk.LEFT, padx=5)
         
         # Response display
         response_frame = ModernLabelFrame(diagnostics_frame, text="Device Response", padding=10)
         response_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        self.response_text = tk.Text(response_frame, height=10, wrap=tk.WORD)
+        # Add a scrollbar to the response text area
+        response_scroll = ttk.Scrollbar(response_frame)
+        response_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.response_text = tk.Text(response_frame, height=10, wrap=tk.WORD, yscrollcommand=response_scroll.set)
         self.response_text.pack(fill=tk.BOTH, expand=True)
+        response_scroll.config(command=self.response_text.yview)
         
         # Start polling for responses
         self.poll_responses()
-
+        
+        return diagnostics_frame
+        
     def create_programming_tab(self):
         """Create the programming tab"""
         programming_frame = ModernFrame(self.notebook)
         self.notebook.add(programming_frame, text="Programming")
         
-        # Program configuration
-        config_frame = ModernLabelFrame(programming_frame, text="Program Configuration", padding=10)
-        config_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Create and pack the program manager
+        self.program_manager = ProgramManager(programming_frame, self.serial_comm)
+        self.program_manager.pack(fill=tk.BOTH, expand=True)
         
-        # Add programming controls here
-        ttk.Label(config_frame, text="Programming interface coming soon...").pack(pady=10)
+        return programming_frame
 
     def create_logging_tab(self):
         """Create the logging tab"""
@@ -1322,6 +2044,22 @@ Each script contains:
         
         self.log_text = tk.Text(log_frame, height=10, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+        
+        return logging_frame
+
+    def on_tab_changed(self, event):
+        """Handle tab change events"""
+        selected_tab = self.notebook.tab(self.notebook.select(), "text")
+        
+        # Handle dashboard tab selection
+        if selected_tab == "Dashboard":
+            if self.serial_comm.is_connected and not self.plotting_active:
+                # Start data collection if connected and not already plotting
+                self.start_data_collection()
+        else:
+            # Stop data collection if leaving dashboard tab
+            if self.plotting_active:
+                self.stop_data_collection()
 
 def main():
     try:
