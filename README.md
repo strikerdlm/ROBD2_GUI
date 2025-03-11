@@ -1,4 +1,4 @@
-# ROBD2 Diagnostic Interface
+# ROBD2 Diagnostic Interface v2.0.0
 
 A modern, intuitive graphical user interface for the ROBD2 device, designed for aerospace physiology training and research.
 
@@ -8,7 +8,7 @@ This software is **EXPERIMENTAL** and should only be used in controlled environm
 
 ## About
 
-The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
+The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, advanced gas calculations, data logging capabilities, and diagnostic tools for aerospace physiology training.
 
 ### Author
 **Diego Malpica MD**
@@ -22,30 +22,48 @@ Initial work - [strikerdlm](https://github.com/strikerdlm)
 
 ## Features
 
-- Real-time data visualization with customizable time scales
+### Core Functionality
+- Real-time data visualization with customizable time scales and auto-scaling
+- Advanced gas calculations with altitude compensation
 - Comprehensive data logging and export capabilities
-- Device calibration tools
-- Performance monitoring
-- Diagnostic command interface
-- Modern, intuitive user interface
-- Automatic data validation and range checking
-- CSV data export with timestamps
-- Training tab with script viewers and checklists
+- Multi-step device calibration with validation
+- Performance monitoring and analysis tools
+- Interactive diagnostic command interface
+
+### User Interface
+- Modern, intuitive tabbed interface
+- Professional results display with color-coded messages
+- Customizable layout with resizable panels
+- Dark mode support for reduced eye strain
 - Mouse wheel scrolling support for all scrollable windows
+
+### Training Support
 - Pre-flight, during training, and post-training checklists
 - Support for both English and Spanish training scripts
+- Real-time script viewer with progress tracking
+- Integrated training session management
+- Automatic data validation and range checking
+
+### Data Management
+- CSV data export with timestamps and metadata
+- Automatic backup of session data
+- Data filtering and validation
+- Session summary reports
+- Historical data analysis tools
 
 ## Requirements
 
+### Software Requirements
 - Python 3.8 or higher
 - Windows 10 or higher
-- Required Python packages:
-  ```
-  pyserial
-  rich
-  matplotlib
-  numpy
-  ```
+
+### Required Python Packages
+```
+pyserial>=3.5
+rich>=13.0.0
+matplotlib>=3.7.0
+numpy>=1.24.0
+```
 
 ## Installation
 
@@ -65,23 +83,30 @@ Initial work - [strikerdlm](https://github.com/strikerdlm)
    python robd2_gui.py
    ```
 
-## Usage
+## Quick Start Guide
 
-1. Connect to the ROBD2 device using the Connection tab
-2. Select the appropriate device ID
-3. Use the Dashboard tab for real-time monitoring
-4. Export data using the Export button when monitoring is complete
+1. Connect your ROBD2 device to a USB port
+2. Launch the application
+3. In the Connection tab:
+   - Select the appropriate COM port
+   - Choose your device ID
+   - Click "Connect"
+4. Use the Dashboard tab for real-time monitoring
+5. Use the Calibration tab for device setup
+6. Export data using the Export button when monitoring is complete
 
 ## Data Validation
 
-The software implements the following validation ranges:
+The software implements comprehensive data validation:
 - SpO2: 50-100%
 - O2 Concentration: 0-100%
 - Pulse Rate: 20-220 bpm
+- Altitude: 0-35,000 ft
+- Temperature: 15-35°C
 
 ## License
 
-Copyright © 2025 Diego Malpica MD. All rights reserved.
+Copyright © 2024 Diego Malpica MD. All rights reserved.
 
 This software is proprietary and confidential. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
 
@@ -89,12 +114,15 @@ This software is proprietary and confidential. Unauthorized copying, modificatio
 
 This software is provided "as is" without any warranties, express or implied. The authors and developers are not responsible for any damages or injuries that may occur from the use of this software.
 
-## Author
+## Support
 
-- **Diego Malpica MD** - *Initial work* - [strikerdlm](https://github.com/strikerdlm)
+For technical support, bug reports, or feature requests, please contact:
+- Email: support@robd2.com
+- GitHub Issues: [ROBD2_GUI Issues](https://github.com/strikerdlm/ROBD2_GUI/issues)
 
 ## Acknowledgments
 
-- Special thanks to the aerospace physiology research community
+- Aerospace physiology research community
 - ROBD2 device development team
-- All contributors and testers 
+- Beta testers and contributors
+- Colombian Aerospace Force 

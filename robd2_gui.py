@@ -20,6 +20,7 @@ from Performance import PerformanceMonitor
 from COM_serial import DataLogger
 from program_manager import ProgramManager
 from performance_gui import PerformanceTab
+from gas_calculator_tab import GasCalculatorTab
 
 # Configure standard logging
 logging.basicConfig(
@@ -33,9 +34,12 @@ class ROBD2GUI:
     def __init__(self, root):
         """Initialize the GUI"""
         self.root = root
-        self.root.title("ROBD2 Control Interface")
+        self.root.title("ROBD2 Diagnostic Interface")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
+        
+        # Initialize scrolling management
+        self.active_scrollables = []
         
         # Initialize data store
         self.data_store = DataStore()
@@ -62,6 +66,7 @@ class ROBD2GUI:
         self.status_bar.pack(fill=tk.X, side=tk.LEFT, padx=5)
         
         # Create tabs
+        self.create_gas_calculator_tab()  # Add the gas calculator tab first
         self.create_connection_tab()
         self.create_calibration_tab()
         self.create_performance_tab()
@@ -79,6 +84,98 @@ class ROBD2GUI:
         
         # Flag for plotting
         self.plotting_active = False
+        
+        # Track the after event ID
+        self.poll_after_id = None
+        
+    def enable_scrolling(self, widget):
+        """Enable mouse wheel scrolling for a widget"""
+        def _on_mousewheel(event):
+            try:
+                if widget.winfo_exists():
+                    if sys.platform.startswith('win'):
+                        widget.yview_scroll(int(-1*(event.delta/120)), "units")
+                    else:
+                        if event.num == 4:
+                            widget.yview_scroll(-1, "units")
+                        elif event.num == 5:
+                            widget.yview_scroll(1, "units")
+            except tk.TclError:
+                pass
+
+        if sys.platform.startswith('win'):
+            widget.bind_all("<MouseWheel>", _on_mousewheel)
+        else:
+            widget.bind_all("<Button-4>", _on_mousewheel)
+            widget.bind_all("<Button-5>", _on_mousewheel)
+            
+        # Store the widget and its bindings for cleanup
+        self.active_scrollables.append({
+            'widget': widget,
+            'bindings': [
+                ("<MouseWheel>", _on_mousewheel) if sys.platform.startswith('win') 
+                else ("<Button-4>", _on_mousewheel),
+                ("<Button-5>", _on_mousewheel)
+            ]
+        })
+
+    def cleanup_scrolling(self):
+        """Clean up all mouse wheel bindings"""
+        try:
+            for scrollable in self.active_scrollables:
+                if isinstance(scrollable, dict):
+                    # Handle dictionary format
+                    widget = scrollable.get('widget')
+                    bindings = scrollable.get('bindings', [])
+                    if widget:
+                        for event, _ in bindings:
+                            try:
+                                widget.unbind_all(event)
+                            except tk.TclError:
+                                pass
+                elif isinstance(scrollable, tuple):
+                    # Handle tuple format
+                    event, _ = scrollable
+                    try:
+                        self.unbind_all(event)
+                    except tk.TclError:
+                        pass
+            self.active_scrollables.clear()
+        except Exception as e:
+            log.error(f"Error cleaning up scrolling: {e}")
+
+    def create_scrollable_frame(self, parent, **kwargs):
+        """Create a scrollable frame and return both the canvas and the frame"""
+        canvas = tk.Canvas(parent, **kwargs)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = ModernFrame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        self.enable_scrolling(canvas)
+        
+        return canvas, scrollable_frame
+
+    def create_gas_calculator_tab(self):
+        """Create the gas calculator tab"""
+        gas_calculator_tab = GasCalculatorTab(self.notebook)
+        self.notebook.add(gas_calculator_tab, text="Gas Calculator")
+        
+        # Add the gas calculator's scrollable widgets to our tracking
+        if hasattr(gas_calculator_tab, 'active_scrollables'):
+            self.active_scrollables.extend(gas_calculator_tab.active_scrollables)
+            
+        # Bind cleanup to tab destruction
+        gas_calculator_tab.bind("<Destroy>", lambda e: self.cleanup_scrolling())
         
     def create_menu_bar(self):
         """Create the menu bar"""
@@ -218,8 +315,8 @@ class ROBD2GUI:
         except Exception as e:
             log.error(f"Error polling response: {e}")
             
-        # Schedule the next poll
-        self.root.after(100, self.poll_responses)
+        # Schedule the next poll and store the after ID
+        self.poll_after_id = self.root.after(100, self.poll_responses)
         
     def start_calibration(self):
         """Start O2 sensor calibration"""
@@ -459,7 +556,7 @@ class ROBD2GUI:
         
         subtitle_label = ttk.Label(
             title_frame,
-            text="A Comprehensive Tool for ROBD2 Device Management",
+            text="Advanced Control and Analysis Interface for ROBD2 Devices",
             font=('Helvetica', 12)
         )
         subtitle_label.pack(pady=(5, 0))
@@ -470,7 +567,7 @@ class ROBD2GUI:
         
         version_label = ttk.Label(
             version_frame,
-            text="Version 1.0.0",
+            text="Version 2.0.0",
             font=('Helvetica', 14, 'bold')
         )
         version_label.pack()
@@ -489,7 +586,7 @@ Colombian Aerospace Force
 
 Initial work - [strikerdlm](https://github.com/strikerdlm)
 
-Copyright © 2025 Diego Malpica MD. All rights reserved.
+Copyright © 2024 Diego Malpica MD. All rights reserved.
 
 License: MIT License
 Repository: https://github.com/strikerdlm/ROBD2_GUI
@@ -511,7 +608,7 @@ For contributing please read the CONTRIBUTING.md file in the repository.
         description_text = """
 The ROBD2 Diagnostic Interface is a comprehensive tool for monitoring, calibrating, and analyzing data from ROBD2 devices. It provides real-time visualization of critical parameters, data logging capabilities, and diagnostic tools for aerospace physiology training.
 
-This software is EXPERIMENTAL and should only be used in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training.
+This software is designed for use in controlled environments under the supervision of trained medical professionals or experts in ROBD devices for aerospace physiology training. It includes advanced features for gas calculations, performance monitoring, and training management.
 """
         description_label = ttk.Label(
             description_frame,
@@ -527,14 +624,17 @@ This software is EXPERIMENTAL and should only be used in controlled environments
         features_frame.pack(fill=tk.X, pady=(0, 20))
         
         features_text = """
+• Advanced gas calculator with physiological parameters, consumption analysis, and capacity planning
 • Real-time data visualization with customizable time scales
 • Comprehensive data logging and export capabilities
-• Device calibration tools
-• Performance monitoring
-• Diagnostic command interface
-• Modern, intuitive user interface
+• Device calibration tools with automated procedures
+• Performance monitoring with real-time graphs
+• Training session management and checklists
+• Diagnostic command interface with error handling
+• Modern, intuitive user interface with dark mode support
 • Automatic data validation and range checking
 • CSV data export with timestamps
+• Multi-platform support (Windows, Linux)
 """
         features_label = ttk.Label(
             features_frame,
@@ -551,12 +651,13 @@ This software is EXPERIMENTAL and should only be used in controlled environments
         
         requirements_text = """
 • Python 3.8 or higher
-• Windows 10 or higher
+• Windows 10/11 or Linux
 • Required Python packages:
-  - pyserial
-  - rich
-  - matplotlib
-  - numpy
+  - pyserial >= 3.5
+  - matplotlib >= 3.7
+  - numpy >= 1.24
+  - tkinter (included with Python)
+  - pillow >= 10.0
 """
         requirements_label = ttk.Label(
             requirements_frame,
@@ -824,8 +925,11 @@ For more information, please refer to the ROBD2 Technical Manual.
         connection_frame = ModernFrame(self.notebook)
         self.notebook.add(connection_frame, text="Connection")
         
+        # Create scrollable frame
+        canvas, scrollable_frame = self.create_scrollable_frame(connection_frame)
+        
         # Port selection
-        port_frame = ModernLabelFrame(connection_frame, text="Port Selection", padding=10)
+        port_frame = ModernLabelFrame(scrollable_frame, text="Port Selection", padding=10)
         port_frame.pack(fill=tk.X, padx=10, pady=5)
         
         self.port_var = tk.StringVar()
@@ -842,17 +946,22 @@ For more information, please refer to the ROBD2 Technical Manual.
         self.refresh_btn.pack(side=tk.LEFT, padx=5)
         
         # Status display
-        status_frame = ModernLabelFrame(connection_frame, text="Status", padding=10)
+        status_frame = ModernLabelFrame(scrollable_frame, text="Status", padding=10)
         status_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         self.status_text = tk.Text(status_frame, height=10, wrap=tk.WORD)
         self.status_text.pack(fill=tk.BOTH, expand=True)
         
+        # Enable scrolling for status text
+        status_scroll = ttk.Scrollbar(status_frame, command=self.status_text.yview)
+        status_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.status_text.configure(yscrollcommand=status_scroll.set)
+        
         # Pre-flight checklist
-        checklist_frame = ModernLabelFrame(connection_frame, text="Pre-flight Checklist", padding=10)
+        checklist_frame = ModernLabelFrame(scrollable_frame, text="Pretraining Setup", padding=10)
         checklist_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        checklist_btn = ModernButton(checklist_frame, text="Open Checklist", command=lambda: ChecklistWindow(self.root, "Pre-flight Checklist", [
+        checklist_btn = ModernButton(checklist_frame, text="Open Checklist", command=lambda: ChecklistWindow(self.root, "Before Start (Daily) Checklist", [
             "Verify ROBD2 system is properly unpacked and installed",
             "Remove and store all packaging materials for future use",
             "Confirm power connection is correct for region (115V or 230V) and securely grounded",
@@ -877,9 +986,20 @@ For more information, please refer to the ROBD2 Technical Manual.
         calibration_frame = ModernFrame(self.notebook)
         self.notebook.add(calibration_frame, text="Calibration")
         
+        # Create a horizontal paned window for main layout
+        main_paned = ttk.PanedWindow(calibration_frame, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Left side - Controls and inputs
+        left_frame = ModernFrame(main_paned)
+        main_paned.add(left_frame, weight=2)
+        
+        # Create scrollable frame for left side
+        canvas, scrollable_frame = self.create_scrollable_frame(left_frame)
+        
         # Warning frame
-        warning_frame = ModernLabelFrame(calibration_frame, text="Important Warnings", padding=10)
-        warning_frame.pack(fill=tk.X, padx=10, pady=5)
+        warning_frame = ModernLabelFrame(scrollable_frame, text="Important Warnings", padding=10)
+        warning_frame.pack(fill=tk.X, padx=5, pady=5)
         
         warning_text = """
 Before starting calibration:
@@ -891,15 +1011,15 @@ Before starting calibration:
         warning_label = ttk.Label(
             warning_frame,
             text=warning_text,
-            wraplength=700,
+            wraplength=500,
             justify=tk.LEFT,
             font=('Helvetica', 10, 'bold')
         )
         warning_label.pack(pady=5)
         
         # Status indicator frame
-        self.calibration_status_frame = ModernLabelFrame(calibration_frame, text="Calibration Status", padding=10)
-        self.calibration_status_frame.pack(fill=tk.X, padx=10, pady=5)
+        self.calibration_status_frame = ModernLabelFrame(scrollable_frame, text="Calibration Status", padding=10)
+        self.calibration_status_frame.pack(fill=tk.X, padx=5, pady=5)
         
         self.status_var = tk.StringVar(value="Ready for calibration")
         self.status_label = ttk.Label(
@@ -920,8 +1040,8 @@ Before starting calibration:
         self.calibration_progress.pack(pady=5, fill=tk.X)
         
         # Device selection
-        device_frame = ModernLabelFrame(calibration_frame, text="Device Selection", padding=10)
-        device_frame.pack(fill=tk.X, padx=10, pady=5)
+        device_frame = ModernLabelFrame(scrollable_frame, text="Device Selection", padding=10)
+        device_frame.pack(fill=tk.X, padx=5, pady=5)
         
         ttk.Label(device_frame, text="ROBD2 Device ID:").pack(side=tk.LEFT, padx=5)
         self.device_var = tk.StringVar(value="9515")
@@ -930,8 +1050,8 @@ Before starting calibration:
         device_combo['values'] = ['9515', '9516', '9471']
         
         # Self-calibration section
-        self_cal_frame = ModernLabelFrame(calibration_frame, text="Self-Calibration", padding=10)
-        self_cal_frame.pack(fill=tk.X, padx=10, pady=5)
+        self_cal_frame = ModernLabelFrame(scrollable_frame, text="Self-Calibration", padding=10)
+        self_cal_frame.pack(fill=tk.X, padx=5, pady=5)
         
         # Room air and 100% O2 values display
         values_frame = ttk.Frame(self_cal_frame)
@@ -1001,7 +1121,7 @@ Before starting calibration:
         self.clear_calibration_btn.pack(side=tk.LEFT, padx=5)
         
         # Manual Calibration section
-        manual_cal_frame = ModernLabelFrame(calibration_frame, text="Manual Calibration Recording", padding=10)
+        manual_cal_frame = ModernLabelFrame(scrollable_frame, text="Manual Calibration Recording", padding=10)
         manual_cal_frame.pack(fill=tk.X, padx=10, pady=5)
         
         self.start_calibration_btn = ModernButton(
@@ -1013,7 +1133,7 @@ Before starting calibration:
         self.start_calibration_btn.pack(pady=5)
         
         # Results display
-        results_frame = ModernLabelFrame(calibration_frame, text="Calibration Results", padding=10)
+        results_frame = ModernLabelFrame(scrollable_frame, text="Calibration Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # Add scrollbar to results text
@@ -1094,6 +1214,11 @@ Before starting calibration:
             o2_values = []
             voltage_values = []
             
+            # Add header to results
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.results_text.insert(tk.END, f"\n", 'header')
+            self.results_text.insert(tk.END, f"=== Room Air Calibration Started at {timestamp} ===\n", 'header')
+            
             for i in range(5):
                 # Update progress
                 self.calibration_progress['value'] = (i + 1) * 20
@@ -1110,12 +1235,18 @@ Before starting calibration:
                     voltage = float(response.strip())
                     voltage_values.append(voltage)
                     
-                    self.results_text.insert(tk.END, f"  Sample {i+1}: O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
+                    # Add sample data with timestamp
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                    self.results_text.insert(tk.END, f"Sample {i+1}: ", 'info')
+                    self.results_text.insert(tk.END, f"O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
                     self.results_text.see(tk.END)
                     time.sleep(0.5)
                 except Exception as e:
                     log.error(f"Error collecting sample {i+1}: {e}")
-                    self.results_text.insert(tk.END, f"  Error in sample {i+1}: {str(e)}\n")
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                    self.results_text.insert(tk.END, f"Error in sample {i+1}: {str(e)}\n", 'error')
                     self.results_text.see(tk.END)
                     
             # Calculate averages if we have data
@@ -1131,20 +1262,28 @@ Before starting calibration:
                 self.calibration_data['room_air']['o2_values'] = o2_values
                 self.calibration_data['room_air']['voltage_values'] = voltage_values
                 
-                self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Room air values recorded: O2={avg_o2:.2f}%, Voltage={avg_voltage:.3f}V\n")
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                self.results_text.insert(tk.END, f"\n[{timestamp}] ", 'timestamp')
+                self.results_text.insert(tk.END, "Room air calibration completed successfully\n", 'success')
+                self.results_text.insert(tk.END, f"Average O2: {avg_o2:.2f}%\n")
+                self.results_text.insert(tk.END, f"Average Voltage: {avg_voltage:.3f}V\n")
                 self.results_text.see(tk.END)
                 
                 # Update status to success
                 self.update_calibration_status("Room air calibration complete ✓", "green", 100)
             else:
                 self.update_calibration_status("Room air calibration failed", "red", 0)
-                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n")
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n", 'error')
                 self.results_text.see(tk.END)
                 
         except Exception as e:
             log.error(f"Error in room air calibration: {e}", exc_info=True)
             self.update_calibration_status(f"Error: {str(e)}", "red", 0)
-            self.results_text.insert(tk.END, f"Error: {str(e)}\n")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+            self.results_text.insert(tk.END, f"Error: {str(e)}\n", 'error')
             self.results_text.see(tk.END)
             
         finally:
@@ -1166,6 +1305,11 @@ Before starting calibration:
             o2_values = []
             voltage_values = []
             
+            # Add header to results
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.results_text.insert(tk.END, f"\n", 'header')
+            self.results_text.insert(tk.END, f"=== 100% O2 Calibration Started at {timestamp} ===\n", 'header')
+            
             for i in range(5):
                 # Update progress
                 self.calibration_progress['value'] = (i + 1) * 20
@@ -1182,12 +1326,18 @@ Before starting calibration:
                     voltage = float(response.strip())
                     voltage_values.append(voltage)
                     
-                    self.results_text.insert(tk.END, f"  Sample {i+1}: O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
+                    # Add sample data with timestamp
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                    self.results_text.insert(tk.END, f"Sample {i+1}: ", 'info')
+                    self.results_text.insert(tk.END, f"O2={o2_conc:.2f}%, Voltage={voltage:.3f}V\n")
                     self.results_text.see(tk.END)
                     time.sleep(0.5)
                 except Exception as e:
                     log.error(f"Error collecting sample {i+1}: {e}")
-                    self.results_text.insert(tk.END, f"  Error in sample {i+1}: {str(e)}\n")
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                    self.results_text.insert(tk.END, f"Error in sample {i+1}: {str(e)}\n", 'error')
                     self.results_text.see(tk.END)
                     
             # Calculate averages if we have data
@@ -1203,20 +1353,28 @@ Before starting calibration:
                 self.calibration_data['pure_o2']['o2_values'] = o2_values
                 self.calibration_data['pure_o2']['voltage_values'] = voltage_values
                 
-                self.results_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - 100% O2 values recorded: O2={avg_o2:.2f}%, Voltage={avg_voltage:.3f}V\n")
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                self.results_text.insert(tk.END, f"\n[{timestamp}] ", 'timestamp')
+                self.results_text.insert(tk.END, "100% O2 calibration completed successfully\n", 'success')
+                self.results_text.insert(tk.END, f"Average O2: {avg_o2:.2f}%\n")
+                self.results_text.insert(tk.END, f"Average Voltage: {avg_voltage:.3f}V\n")
                 self.results_text.see(tk.END)
                 
                 # Update status to success
                 self.update_calibration_status("100% O2 calibration complete ✓", "green", 100)
             else:
                 self.update_calibration_status("100% O2 calibration failed", "red", 0)
-                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n")
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+                self.results_text.insert(tk.END, "Error: Failed to collect valid data\n", 'error')
                 self.results_text.see(tk.END)
                 
         except Exception as e:
             log.error(f"Error in 100% O2 calibration: {e}", exc_info=True)
             self.update_calibration_status(f"Error: {str(e)}", "red", 0)
-            self.results_text.insert(tk.END, f"Error: {str(e)}\n")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.results_text.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+            self.results_text.insert(tk.END, f"Error: {str(e)}\n", 'error')
             self.results_text.see(tk.END)
             
         finally:
@@ -2067,14 +2225,22 @@ def main():
         app = ROBD2GUI(root)
         
         def on_closing():
-            """Handle application closing"""
-            if hasattr(app, 'serial_comm'):
-                app.serial_comm.disconnect()
-            if hasattr(app, 'performance_monitor'):
-                app.performance_monitor.stop_monitoring()
-            if hasattr(app, 'data_logger'):
-                app.data_logger.stop_logging()
-            root.destroy()
+            try:
+                # Cancel any pending after events
+                if app.poll_after_id:
+                    root.after_cancel(app.poll_after_id)
+                
+                # Clean up scrolling
+                app.cleanup_scrolling()
+                
+                # Disconnect device if connected
+                if app.serial_comm.is_connected:
+                    app.disconnect_device()
+                    
+            except Exception as e:
+                log.error(f"Error during cleanup: {e}")
+            finally:
+                root.destroy()
         
         root.protocol("WM_DELETE_WINDOW", on_closing)
         root.mainloop()

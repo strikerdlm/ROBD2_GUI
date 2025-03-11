@@ -78,5 +78,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Script viewer window with improved readability
 - User interface for script selection and display
 
+## [2.0.0] - 2024-03-20
+
+### Added
+- Advanced gas calculations with altitude compensation
+- Professional results display with color-coded messages
+- Dark mode support for reduced eye strain
+- Automatic backup of session data
+- Session summary reports
+- Historical data analysis tools
+- Real-time script viewer with progress tracking
+- Integrated training session management
+
+### Enhanced
+- Improved calibration interface with right-side results panel
+- Enhanced data validation with additional parameters:
+  - Altitude (0-35,000 ft)
+  - Temperature (15-35°C)
+- Modernized About window with updated information
+- Better organization of features and documentation
+- More comprehensive error handling and logging
+- Improved scrolling functionality across all tabs
+- Updated package version requirements
+
+### Technical Improvements
+- Refactored code for better maintainability
+- Enhanced thread safety in data processing
+- Improved memory management
+- Better error handling during cleanup operations
+- More efficient data processing algorithms
+
+### Documentation
+- Updated README with comprehensive feature list
+- Added Quick Start Guide
+- Enhanced installation instructions
+- Added support contact information
+- Improved inline documentation
+
+### Dependencies
+- Updated minimum versions:
+  - pyserial>=3.5
+  - rich>=13.0.0
+  - matplotlib>=3.7.0
+  - numpy>=1.24.0
+
 [1.0.0]: https://github.com/strikerdlm/ROBD2_GUI/releases/tag/v1.0.0
-[1.0.1]: https://github.com/strikerdlm/ROBD2_GUI/compare/v1.0.0...v1.0.1 
+[1.0.1]: https://github.com/strikerdlm/ROBD2_GUI/compare/v1.0.0...v1.0.1
+[2.0.0]: https://github.com/strikerdlm/ROBD2_GUI/compare/v1.0.1...v2.0.0 
