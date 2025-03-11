@@ -117,7 +117,7 @@ This software is provided "as is" without any warranties, express or implied. Th
 ## Support
 
 For technical support, bug reports, or feature requests, please contact:
-- Email: support@robd2.com
+- Email: dlmalpicah@unal.edu.co
 - GitHub Issues: [ROBD2_GUI Issues](https://github.com/strikerdlm/ROBD2_GUI/issues)
 
 ## Acknowledgments
