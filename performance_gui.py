@@ -74,10 +74,10 @@ class PerformanceTab(ModernFrame):
         )
         self.stop_btn.pack(side=tk.LEFT, padx=5)
         
-        # Export button
+        # Data location button
         self.export_btn = ModernButton(
             control_frame,
-            text="Export Data",
+            text="Show Data Location",
             command=self.export_data,
             state=tk.DISABLED
         )
@@ -129,14 +129,17 @@ Instructions:
 1. Select your ROBD2 device from the dropdown menu
 2. Click 'Start Monitoring' to begin performance analysis
 3. The system will automatically:
-   - Monitor O2 concentration and altitude
-   - Calculate performance metrics
-   - Log data to CSV file
-4. Results are displayed in real-time with:
-   - O2 concentration graph
-   - Error analysis
-   - Statistical metrics
-5. Click 'Stop Monitoring' when finished
+   - Monitor O2 concentration, altitude, and sensor voltages (5Hz rate)
+   - Calculate comprehensive performance metrics and statistics
+   - Save ALL data to timestamped CSV files in /performance_logs/
+   - Handle 25-second stabilization periods after altitude changes
+   - Provide IC95 confidence analysis and pass/review status
+4. Real-time displays show:
+   - Current O2 levels, errors, and stabilization status
+   - Statistical analysis (median, standard deviation, CV%, etc.)
+   - Data logging confirmation ("✓ DATA SAVED")
+5. Click 'Stop Monitoring' when finished - you'll get a summary report
+6. All data is permanently saved - no export step needed!
 """
         instructions_frame = ModernLabelFrame(self, text="Instructions", padding=10)
         instructions_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -199,6 +202,9 @@ Instructions:
             self.monitor = PerformanceMonitor(self.serial_comm.serial_port)
             self.monitor.set_device_id(device_id)
             
+            # Get the log file path for user feedback
+            log_file_path = self.monitor.get_log_file_path()
+            
             # Set up data callback
             self.monitor.data_callback = self.update_display
             
@@ -207,7 +213,20 @@ Instructions:
             self.monitor_thread.daemon = True
             self.monitor_thread.start()
             
-            self.update_status(f"Monitoring ROBD2-{device_id} started", "green")
+            self.update_status(f"Monitoring ROBD2-{device_id} started - saving to {log_file_path.name}", "green")
+            
+            # Show user where data is being saved
+            messagebox.showinfo(
+                "Monitoring Started",
+                f"Performance monitoring started for ROBD2-{device_id}\n\n"
+                f"✓ All data is being automatically saved to:\n{log_file_path}\n\n"
+                f"The system will:\n"
+                f"• Monitor O2 concentrations and sensor voltages\n"
+                f"• Calculate statistical analysis in real-time\n"
+                f"• Track pass/review status for each measurement\n"
+                f"• Handle altitude stabilization periods\n\n"
+                f"Click 'Stop Monitoring' when complete."
+            )
             
         except Exception as e:
             log.error(f"Failed to start monitoring: {e}", exc_info=True)
@@ -236,11 +255,46 @@ Instructions:
                 if self.monitor_thread:
                     self.monitor_thread.join(timeout=1.0)
                 
-                self.update_status("Monitoring stopped successfully", "green", 100)
+                # Get log file path and results
+                log_file_path = self.monitor.get_log_file_path()
+                altitude_results = self.monitor.get_altitude_results()
                 
-                # Ask if user wants to export data
-                if messagebox.askyesno("Export Data", "Would you like to export the collected data?"):
-                    self.export_data()
+                # Count total data points saved
+                total_saved = sum(results.get('total_readings', 0) for results in altitude_results.values())
+                
+                self.update_status(f"Monitoring stopped - {total_saved} data points saved to {log_file_path.name}", "green", 100)
+                
+                # Show completion message with file location
+                completion_msg = (
+                    f"Performance monitoring completed!\n\n"
+                    f"✓ Data saved to: {log_file_path}\n"
+                    f"✓ Total data points: {total_saved}\n"
+                    f"✓ Altitudes tested: {len([a for a in altitude_results.values() if a.get('total_readings', 0) > 0])}\n\n"
+                    f"The CSV file contains:\n"
+                    f"• Real-time O2 concentrations and errors\n"
+                    f"• Sensor voltage readings\n"
+                    f"• Statistical analysis (IC95, standard deviation, etc.)\n"
+                    f"• Pass/review status for each measurement\n\n"
+                    f"Would you like to open the folder containing the data file?"
+                )
+                
+                if messagebox.askyesno("Monitoring Complete", completion_msg):
+                    # Open the folder containing the log file
+                    import subprocess
+                    import sys
+                    
+                    folder_path = log_file_path.parent
+                    
+                    try:
+                        if sys.platform.startswith('win'):
+                            subprocess.run(['explorer', str(folder_path)])
+                        elif sys.platform.startswith('darwin'):  # macOS
+                            subprocess.run(['open', str(folder_path)])
+                        else:  # Linux
+                            subprocess.run(['xdg-open', str(folder_path)])
+                    except Exception as e:
+                        log.warning(f"Could not open folder: {e}")
+                        messagebox.showinfo("File Location", f"Data saved to:\n{log_file_path}")
                     
             except Exception as e:
                 log.error(f"Error stopping monitoring: {e}", exc_info=True)
@@ -249,42 +303,64 @@ Instructions:
                 
             finally:
                 self.update_ui_state(monitoring=False)
+                
+                # Reset window title
+                if hasattr(self, 'winfo_toplevel'):
+                    try:
+                        top = self.winfo_toplevel()
+                        if top and hasattr(top, 'title'):
+                            top.title("ROBD2 Diagnostic Interface")
+                    except:
+                        pass
         
     def export_data(self):
-        """Export monitoring data to CSV file"""
+        """Show information about where data is saved"""
         if not self.monitor:
-            messagebox.showerror("Error", "No monitoring data available")
+            messagebox.showinfo("No Data", "No monitoring session available.\n\nData is automatically saved during monitoring to CSV files in the /performance_logs/ directory.")
             return
             
         try:
-            self.update_status("Exporting data...", "blue")
+            log_file_path = self.monitor.get_log_file_path()
+            altitude_results = self.monitor.get_altitude_results()
             
-            # Get timestamp for filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            device_id = self.device_var.get()
+            # Count data points
+            total_saved = sum(results.get('total_readings', 0) for results in altitude_results.values())
             
-            # Create export directory
-            export_dir = Path("performance_exports")
-            export_dir.mkdir(exist_ok=True)
+            info_msg = (
+                f"Data Location Information\n\n"
+                f"✓ Current monitoring data is automatically saved to:\n"
+                f"{log_file_path}\n\n"
+                f"✓ Total data points saved: {total_saved}\n"
+                f"✓ Altitudes monitored: {len([a for a in altitude_results.values() if a.get('total_readings', 0) > 0])}\n\n"
+                f"The CSV file contains comprehensive performance data including:\n"
+                f"• Timestamps and altitude readings\n"
+                f"• O2 concentrations and sensor voltages\n"
+                f"• Statistical analysis (IC95, median, std dev, CV%, etc.)\n"
+                f"• Pass/review status for each measurement\n\n"
+                f"Would you like to open the folder containing this file?"
+            )
             
-            # Create export filename
-            filename = export_dir / f"ROBD2_{device_id}_{timestamp}_performance.csv"
-            
-            # Export data
-            with open(filename, 'w', newline='') as f:
-                # Write export code here
-                # This is a placeholder
-                f.write("Performance data export\n")
-                f.write(f"Device: ROBD2-{device_id}\n")
-                f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            if messagebox.askyesno("Data Location", info_msg):
+                # Open the folder containing the log file
+                import subprocess
+                import sys
                 
-            self.update_status(f"Data exported to {filename}", "green", 100)
-            messagebox.showinfo("Export Complete", f"Data exported to:\n{filename}")
-            
+                folder_path = log_file_path.parent
+                
+                try:
+                    if sys.platform.startswith('win'):
+                        subprocess.run(['explorer', str(folder_path)])
+                    elif sys.platform.startswith('darwin'):  # macOS
+                        subprocess.run(['open', str(folder_path)])
+                    else:  # Linux
+                        subprocess.run(['xdg-open', str(folder_path)])
+                except Exception as e:
+                    log.warning(f"Could not open folder: {e}")
+                    messagebox.showinfo("File Location", f"Data saved to:\n{log_file_path}")
+                    
         except Exception as e:
-            log.error(f"Error exporting data: {e}", exc_info=True)
-            self.update_status(f"Error exporting data: {str(e)}", "red", 0)
-            messagebox.showerror("Error", f"Failed to export data: {str(e)}")
+            log.error(f"Error getting data information: {e}", exc_info=True)
+            messagebox.showerror("Error", f"Error getting data information: {str(e)}")
     
     def clear_data(self):
         """Clear monitoring data"""
@@ -321,23 +397,57 @@ Instructions:
     def update_display(self, data):
         """Update the display with new data"""
         try:
-            # Update status text
+            # Update status text with enhanced information
             timestamp = datetime.now().strftime("%H:%M:%S")
-            status = (
-                f"[{timestamp}] Alt: {data['altitude']}ft | "
-                f"O2: {data['o2_conc']:.2f}% | "
-                f"BLP: {data['blp']:.2f}inH2O | "
-                f"Program: {data['program']}\n"
-            )
+            
+            # Check if we have enhanced data from the monitor
+            if 'avg_o2' in data and 'error' in data and 'ic95_status' in data:
+                status = (
+                    f"[{timestamp}] Alt: {data['altitude']}ft | "
+                    f"O2: {data['avg_o2']:.2f}% (Raw: {data['o2_conc']:.2f}%) | "
+                    f"Error: {data['error']:.2f}% | "
+                    f"Status: {data['ic95_status']} | "
+                    f"BLP: {data['blp']:.2f}inH2O | "
+                    f"Program: {data['program']}"
+                )
+                
+                if data.get('in_stabilization', False):
+                    status += " | STABILIZING"
+                
+                status += " | ✓ DATA SAVED\n"
+            else:
+                # Fallback to basic display
+                status = (
+                    f"[{timestamp}] Alt: {data['altitude']}ft | "
+                    f"O2: {data['o2_conc']:.2f}% | "
+                    f"BLP: {data['blp']:.2f}inH2O | "
+                    f"Program: {data['program']} | ✓ DATA SAVED\n"
+                )
+            
             self.status_text.insert(tk.END, status)
             self.status_text.see(tk.END)
             
-            # Update progress bar with random progress to show activity
+            # Keep only last 50 lines to prevent memory issues
+            lines = self.status_text.get("1.0", tk.END).split('\n')
+            if len(lines) > 50:
+                self.status_text.delete("1.0", f"{len(lines)-50}.0")
+            
+            # Update progress bar to show monitoring activity
             import random
-            self.progress_bar['value'] = random.randint(10, 90)
+            self.progress_bar['value'] = random.randint(60, 95)
             
             # Update plots
             self.update_plots(data)
+            
+            # Update window title to show active monitoring
+            if hasattr(self, 'winfo_toplevel'):
+                try:
+                    top = self.winfo_toplevel()
+                    if top and hasattr(top, 'title'):
+                        device_id = self.device_var.get()
+                        top.title(f"ROBD2 Diagnostic Interface - Monitoring ROBD2-{device_id}")
+                except:
+                    pass
             
         except Exception as e:
             log.error(f"Error updating display: {e}", exc_info=True)

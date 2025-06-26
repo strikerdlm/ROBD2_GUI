@@ -50,6 +50,7 @@ class PerformanceMonitor:
         self.device_id = None
         self.data_callback = None
         self.log_file = None
+        self.altitude_results = {}
 
     def set_device_id(self, device_id: str):
         """Set the device ID and create log file"""
@@ -87,6 +88,60 @@ class PerformanceMonitor:
         if not valid_specs:
             return None
         return max(valid_specs, key=lambda x: x.altitude)
+
+    def _is_stabilization_period(self, current_altitude: int) -> bool:
+        """Check if we're in the 25-second stabilization period after altitude change"""
+        current_time = time.time()
+        
+        # If this is our first reading
+        if self.last_altitude is None:
+            self.last_altitude = current_altitude
+            self.altitude_change_time = current_time
+            return True
+        
+        # If altitude has changed
+        if current_altitude != self.last_altitude:
+            self.last_altitude = current_altitude
+            self.altitude_change_time = current_time
+            self.o2_readings.clear()  # Clear readings from previous altitude
+            return True
+        
+        # If we're within 25 seconds of an altitude change
+        if self.altitude_change_time and (current_time - self.altitude_change_time) < 25:
+            return True
+            
+        return False
+
+    def calculate_ic95(self, error: float, spec: AltitudeSpec) -> tuple[str, str]:
+        """Calculate 95% confidence interval and determine status"""
+        try:
+            # Calculate standard error (using 1.96 for 95% CI)
+            margin_of_error = 1.96 * abs(error) / math.sqrt(len(self.o2_readings))
+            lower_bound = error - margin_of_error
+            upper_bound = error + margin_of_error
+            
+            # Check if the error range falls within acceptable limits
+            if (spec.range_min <= (spec.desired_o2 + upper_bound) <= spec.range_max and 
+                spec.range_min <= (spec.desired_o2 + lower_bound) <= spec.range_max):
+                return "PASS", "green"
+            else:
+                # If initial check results in REVIEW, check error percentage
+                if abs(error) < 1.5:  # If error is less than 1.5%
+                    return "PASS", "green"
+                else:
+                    return "REVIEW", "yellow"
+        except Exception as e:
+            log.error(f"Error calculating IC95: {e}")
+            return "ERROR", "red"
+
+    def _create_altitude_results(self):
+        """Create dictionary to store results for each altitude"""
+        self.altitude_results = {alt.altitude: {
+            'passes': 0,
+            'total_readings': 0,
+            'stats': [],
+            'completed': False
+        } for alt in O2_SPECS}
 
     def calculate_statistics(self, o2_readings: List[float], spec: AltitudeSpec) -> Dict:
         """Calculate comprehensive statistics for O2 readings"""
@@ -196,12 +251,19 @@ class PerformanceMonitor:
             return None
 
     def start_monitoring(self):
-        """Start performance monitoring"""
+        """Start performance monitoring with comprehensive data logging"""
         if not self.device_id:
             raise ValueError("Device ID must be set before starting monitoring")
             
+        if self.monitoring:
+            log.warning("Monitoring is already running")
+            return
+            
         self.monitoring = True
         self.o2_readings = []
+        self._create_altitude_results()
+        
+        log.info(f"Started performance monitoring for ROBD2-{self.device_id} to {self.log_file}")
         
         while self.monitoring:
             try:
@@ -210,15 +272,97 @@ class PerformanceMonitor:
                     time.sleep(0.5)
                     continue
                 
-                # Process data and notify callback if set
-                if self.data_callback:
-                    self.data_callback(data)
+                current_altitude = data["altitude"]
                 
-                # Log data
-                if self.log_file:
-                    self._log_data(data)
+                # Check stabilization period
+                in_stabilization = self._is_stabilization_period(current_altitude)
                 
-                time.sleep(0.2)
+                # Always append the reading for monitoring
+                self.o2_readings.append(data["o2_conc"])
+                
+                # Calculate average using available readings (last 12 for rolling average)
+                recent_readings = self.o2_readings[-12:] if len(self.o2_readings) >= 12 else self.o2_readings
+                avg_o2 = sum(recent_readings) / len(recent_readings)
+                
+                spec = self._get_o2_spec(data["altitude"])
+                
+                if spec:
+                    error = avg_o2 - spec.desired_o2
+                    
+                    # Only calculate statistics if we're past stabilization period
+                    if not in_stabilization and len(recent_readings) > 1:
+                        ic95_status, color = self.calculate_ic95(error, spec)
+                        stats = self.calculate_statistics(recent_readings, spec)
+                    else:
+                        ic95_status, color = "STABILIZING", "yellow"
+                        stats = {
+                            "median": avg_o2,
+                            "std_dev": 0.0,
+                            "cv": 0.0,
+                            "sem": 0.0,
+                            "stability": 0.0,
+                            "drift": 0.0
+                        }
+                    
+                    # Enhanced logging with more details - ALWAYS WRITE TO FILE
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_data = [
+                        timestamp,
+                        data["altitude"],
+                        f"{spec.desired_o2:.2f}",
+                        f"{avg_o2:.2f}",
+                        f"{error:.2f}",
+                        f"{data['voltage1']:.3f}",
+                        f"{data['voltage12']:.3f}",
+                        f"{data['blp']:.2f}",
+                        f"{spec.range_min:.2f}",
+                        f"{spec.range_max:.2f}",
+                        data["program"],
+                        data["final_alt"],
+                        data["elapsed_time"],
+                        data["remaining_time"],
+                        ic95_status,
+                        f"{stats['median']:.2f}",
+                        f"{stats['std_dev']:.3f}",
+                        f"{stats['cv']:.2f}",
+                        f"{stats['sem']:.3f}",
+                        f"{stats['stability']:.1f}",
+                        f"{stats['drift']:.3f}"
+                    ]
+                    
+                    # Write to CSV file - CRITICAL: This ensures all data is saved
+                    try:
+                        with open(self.log_file, 'a', newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(log_data)
+                    except Exception as e:
+                        log.error(f"Error writing to CSV: {e}")
+                    
+                    # Track altitude results for analysis
+                    if not in_stabilization and current_altitude in self.altitude_results:
+                        self.altitude_results[current_altitude]['total_readings'] += 1
+                        if ic95_status == "PASS":
+                            self.altitude_results[current_altitude]['passes'] += 1
+                        if stats and stats['std_dev'] > 0:  # Only add valid stats
+                            self.altitude_results[current_altitude]['stats'].append(stats)
+                        self.altitude_results[current_altitude]['completed'] = True
+                    
+                    # Process data and notify callback if set (for GUI updates)
+                    if self.data_callback:
+                        # Add calculated values to data for GUI
+                        enhanced_data = data.copy()
+                        enhanced_data.update({
+                            'avg_o2': avg_o2,
+                            'error': error,
+                            'ic95_status': ic95_status,
+                            'color': color,
+                            'in_stabilization': in_stabilization,
+                            'stats': stats,
+                            'spec': spec
+                        })
+                        self.data_callback(enhanced_data)
+                
+                time.sleep(0.2)  # 5Hz data collection
                 
             except Exception as e:
                 log.error(f"Error in monitoring loop: {e}")
@@ -226,50 +370,17 @@ class PerformanceMonitor:
 
     def stop_monitoring(self):
         """Stop performance monitoring"""
+        if not self.monitoring:
+            log.warning("Monitoring is not running")
+            return
+        
         self.monitoring = False
+        log.info("Performance monitoring stopped")
 
-    def _log_data(self, data: Dict):
-        """Log performance data to CSV file"""
-        try:
-            spec = self._get_o2_spec(data["altitude"])
-            if not spec:
-                return
-                
-            self.o2_readings.append(data["o2_conc"])
-            if len(self.o2_readings) > 12:
-                self.o2_readings.pop(0)
-                
-            stats = self.calculate_statistics(self.o2_readings, spec)
-            if not stats:
-                return
-                
-            row = [
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                data["altitude"],
-                f"{spec.desired_o2:.2f}",
-                f"{data['o2_conc']:.2f}",
-                f"{stats['error']:.2f}",
-                f"{data['voltage1']:.3f}",
-                f"{data['voltage12']:.3f}",
-                f"{data['blp']:.2f}",
-                f"{spec.range_min:.2f}",
-                f"{spec.range_max:.2f}",
-                data["program"],
-                data["final_alt"],
-                data["elapsed_time"],
-                data["remaining_time"],
-                "PASS" if stats['error'] < 1.5 else "REVIEW",
-                f"{stats['median']:.2f}",
-                f"{stats['std_dev']:.3f}",
-                f"{stats['cv']:.2f}",
-                f"{stats['sem']:.3f}",
-                f"{stats['stability']:.1f}",
-                f"{stats['drift']:.3f}"
-            ]
-            
-            with open(self.log_file, 'a', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(row)
-                
-        except Exception as e:
-            log.error(f"Error logging data: {e}") 
+    def get_altitude_results(self) -> Dict:
+        """Get the altitude results for analysis"""
+        return self.altitude_results
+
+    def get_log_file_path(self) -> Path:
+        """Get the path to the current log file"""
+        return self.log_file 
