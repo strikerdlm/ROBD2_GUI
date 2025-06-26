@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import sys
 import logging
 from datetime import datetime
@@ -259,6 +259,22 @@ class ROBD2GUI:
                 # Update status
                 self.status_bar.configure(text=f"Connected to {port}")
                 self.status_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Connected to {port}\n")
+                
+                # Automatically start logging for specific device (e.g., '9515')
+                target_device_id = "9515"  # Change as needed
+                current_device_id = self.device_var.get()
+                if current_device_id == target_device_id:
+                    # If no Flight ID, prompt the user
+                    if not self.flight_id_var.get():
+                        flight_id = simpledialog.askstring(
+                            "Flight ID Required",
+                            f"Enter Flight ID for device {current_device_id}:"
+                        )
+                        if flight_id:
+                            self.flight_id_var.set(flight_id)
+                    # Only start logging if we have a Flight ID
+                    if self.flight_id_var.get():
+                        self.start_logging()
                 
                 # Check if dashboard tab is visible and start data collection
                 if self.notebook.tab(self.notebook.select(), "text") == "Dashboard":
