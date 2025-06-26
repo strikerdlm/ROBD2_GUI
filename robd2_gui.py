@@ -1643,112 +1643,6 @@ Do you want to proceed with recording calibration data?
         command_frame = ModernLabelFrame(paned, text="ROBD2 Commands")
         paned.add(command_frame, weight=1)
         
-        # Command categories
-        status_frame = ModernLabelFrame(command_frame, text="Status Commands")
-        status_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        # Status commands
-        status_buttons = [
-            ("O2 Concentration", "GET RUN O2CONC"),
-            ("Breathing Loop Pressure", "GET RUN BLPRESS"),
-            ("SpO2 Reading", "GET RUN SPO2"),
-            ("Pulse Reading", "GET RUN PULSE"),
-            ("Current Altitude", "GET RUN ALT"),
-            ("Final Altitude", "GET RUN FINALALT"),
-            ("Elapsed Time", "GET RUN ELTIME"),
-            ("Remaining Time", "GET RUN REMTIME"),
-            ("All Run Data", "GET RUN ALL"),
-            ("System Info", "GET INFO"),
-            ("O2 Source Status", "GET O2 STATUS"),
-            ("System Status", "GET STATUS")
-        ]
-        
-        for i, (label, cmd) in enumerate(status_buttons):
-            row, col = divmod(i, 2)
-            btn = ModernButton(
-                status_frame, 
-                text=label,
-                command=lambda cmd=cmd: self.send_training_command(cmd),
-                width=20
-            )
-            btn.grid(row=row, column=col, padx=5, pady=2, sticky="w")
-        
-        # Control commands
-        control_frame = ModernLabelFrame(command_frame, text="Control Commands")
-        control_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        # First row - O2 Dump controls
-        dump_frame = ttk.Frame(control_frame)
-        dump_frame.pack(fill=tk.X, padx=5, pady=2)
-        
-        ttk.Label(dump_frame, text="O2 Dump Control:").pack(side=tk.LEFT, padx=5)
-        
-        dump_on_btn = ModernButton(
-            dump_frame,
-            text="O2 Dump ON",
-            command=lambda: self.send_training_command("SET O2DUMP 1"),
-            width=12
-        )
-        dump_on_btn.pack(side=tk.LEFT, padx=5)
-        
-        dump_off_btn = ModernButton(
-            dump_frame,
-            text="O2 Dump OFF",
-            command=lambda: self.send_training_command("SET O2DUMP 0"),
-            width=12
-        )
-        dump_off_btn.pack(side=tk.LEFT, padx=5)
-        
-        # Second row - O2 Failure control
-        o2fail_btn = ModernButton(
-            control_frame,
-            text="Simulate O2 Failure",
-            command=lambda: self.send_training_command("RUN O2FAIL"),
-            width=20
-        )
-        o2fail_btn.pack(padx=5, pady=2)
-        
-        # Program control commands
-        program_frame = ModernLabelFrame(command_frame, text="Program Control")
-        program_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        # Program control buttons in grid layout
-        program_buttons = [
-            ("Enter Pilot Test Mode", "RUN READY"),
-            ("Exit Pilot Test Mode", "RUN EXIT"),
-            ("Advance to Next Step", "RUN NEXT"),
-            ("Abort Current Test", "RUN ABORT")
-        ]
-        
-        for i, (label, cmd) in enumerate(program_buttons):
-            row, col = divmod(i, 2)
-            btn = ModernButton(
-                program_frame, 
-                text=label,
-                command=lambda cmd=cmd: self.send_training_command(cmd),
-                width=20
-            )
-            btn.grid(row=row, column=col, padx=5, pady=2, sticky="w")
-        
-        # PPT control commands
-        ppt_frame = ModernLabelFrame(command_frame, text="Positive Pressure Test")
-        ppt_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        ppt_buttons = [
-            ("Enter PPT Mode", "RUN PPT IDLE"),
-            ("Start PPT", "RUN PPT START"),
-            ("Stop PPT", "RUN PPT STOP")
-        ]
-        
-        for i, (label, cmd) in enumerate(ppt_buttons):
-            btn = ModernButton(
-                ppt_frame, 
-                text=label,
-                command=lambda cmd=cmd: self.send_training_command(cmd),
-                width=20
-            )
-            btn.pack(padx=5, pady=2)
-        
         # Flight simulator commands
         flsim_frame = ModernLabelFrame(command_frame, text="Flight Simulator")
         flsim_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -1779,6 +1673,88 @@ Do you want to proceed with recording calibration data?
             width=12
         )
         set_alt_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Control commands
+        control_frame = ModernLabelFrame(command_frame, text="Control Commands")
+        control_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # First row - O2 Dump controls
+        dump_frame = ttk.Frame(control_frame)
+        dump_frame.pack(fill=tk.X, padx=5, pady=2)
+        
+        ttk.Label(dump_frame, text="O2 Dump Control:").pack(side=tk.LEFT, padx=5)
+        
+        dump_on_btn = ModernButton(
+            dump_frame,
+            text="O2 Dump ON",
+            command=lambda: self.send_training_command("SET O2DUMP 1"),
+            width=15
+        )
+        dump_on_btn.pack(side=tk.LEFT, padx=5)
+        
+        dump_off_btn = ModernButton(
+            dump_frame,
+            text="O2 Dump OFF",
+            command=lambda: self.send_training_command("SET O2DUMP 0"),
+            width=15
+        )
+        dump_off_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Program control commands
+        program_frame = ModernLabelFrame(command_frame, text="Program Control")
+        program_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Using a frame to hold the two buttons side-by-side
+        buttons_sub_frame = ttk.Frame(program_frame)
+        buttons_sub_frame.pack(pady=5)
+        
+        next_btn = ModernButton(
+            buttons_sub_frame, 
+            text="Advance to Next Step",
+            command=lambda: self.send_training_command("RUN NEXT"),
+            width=25
+        )
+        next_btn.pack(side=tk.LEFT, padx=5)
+
+        abort_btn = ModernButton(
+            buttons_sub_frame, 
+            text="Abort Current Test",
+            command=lambda: self.send_training_command("RUN ABORT"),
+            width=25
+        )
+        abort_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Command categories
+        status_frame = ModernLabelFrame(command_frame, text="Status Commands")
+        status_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Status commands
+        status_buttons = [
+            ("O2 Concentration", "GET RUN O2CONC"),
+            ("Breathing Loop Pressure", "GET RUN BLPRESS"),
+            ("SpO2 Reading", "GET RUN SPO2"),
+            ("Pulse Reading", "GET RUN PULSE"),
+            ("Current Altitude", "GET RUN ALT"),
+            ("Final Altitude", "GET RUN FINALALT"),
+            ("Elapsed Time", "GET RUN ELTIME"),
+            ("Remaining Time", "GET RUN REMTIME"),
+            ("All Run Data", "GET RUN ALL"),
+            ("System Info", "GET INFO"),
+            ("O2 Source Status", "GET O2 STATUS"),
+            ("System Status", "GET STATUS")
+        ]
+        
+        for i, (label, cmd) in enumerate(status_buttons):
+            row, col = divmod(i, 2)
+            btn = ModernButton(
+                status_frame, 
+                text=label,
+                command=lambda cmd=cmd: self.send_training_command(cmd),
+                width=20
+            )
+            btn.grid(row=row, column=col, padx=5, pady=2, sticky="w")
+        
+        # PPT control commands - REMOVED
         
         # Response display area
         response_frame = ModernLabelFrame(command_frame, text="Command Responses")
@@ -1815,32 +1791,25 @@ Do you want to proceed with recording calibration data?
         
         instructions = """
 1. Before starting any training:
-   - Ensure the ROBD2 device is properly connected
-   - Verify O2 source pressure is adequate
-   - Check that breathing loop is properly installed
+   - Ensure the ROBD2 device is properly connected.
+   - Verify O2 source pressure is adequate.
+   - Check that the breathing loop is properly installed.
 
 2. Basic Training Procedure:
-   a. Enter Pilot Test Mode with "Enter Pilot Test Mode" button
-   b. Select and run a program or use Flight Sim mode
-   c. Monitor SpO2 and pulse rate during the session
-   d. Use O2 Dump in case of emergency or for demonstration
+   a. Use the "Flight Simulator" to manually set altitude.
+   b. Or, use a pre-programmed profile from the "Programming" tab.
+   c. Monitor SpO2 and pulse rate during the session.
+   d. Use "O2 Dump ON" in case of emergency or for demonstration.
 
-3. Using Positive Pressure Test:
-   a. Enter PPT Mode with "Enter PPT Mode" button
-   b. Start the test with "Start PPT" button
-   c. Monitor breathing loop pressure
-   d. Stop the test with "Stop PPT" button
+3. Program Control:
+   - Use "Advance to Next Step" to move through a running program.
+   - Use "Abort Current Test" to stop any running program.
 
-4. Emergency Procedures:
-   - Activate O2 Dump ON for immediate oxygen
-   - Use "Abort Current Test" to stop any running program
-   - Exit Pilot Test Mode when session is complete
-
-5. Monitoring Vitals:
-   - Use SpO2 Reading and Pulse Reading commands
-   - Monitor O2 Concentration regularly
-   - Check breathing loop pressure
-        """
+4. Monitoring Vitals and Status:
+   - Use the "Status Commands" to get real-time data from the device.
+   - Monitor O2 Concentration, SpO2, and other parameters regularly.
+   - The "Command Responses" window shows the raw output from the device.
+"""
         
         instruction_text = tk.Text(materials_frame, wrap=tk.WORD, height=20)
         instruction_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
