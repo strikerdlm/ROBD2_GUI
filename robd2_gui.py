@@ -253,28 +253,11 @@ class ROBD2GUI:
                 
                 # Enable features
                 self.start_calibration_btn.configure(state=tk.NORMAL)
-                self.start_performance_btn.configure(state=tk.NORMAL)
                 self.start_logging_btn.configure(state=tk.NORMAL)
                 
                 # Update status
                 self.status_bar.configure(text=f"Connected to {port}")
                 self.status_text.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - Connected to {port}\n")
-                
-                # Automatically start logging for specific device (e.g., '9515')
-                target_device_id = "9515"  # Change as needed
-                current_device_id = self.device_var.get()
-                if current_device_id == target_device_id:
-                    # If no Flight ID, prompt the user
-                    if not self.flight_id_var.get():
-                        flight_id = simpledialog.askstring(
-                            "Flight ID Required",
-                            f"Enter Flight ID for device {current_device_id}:"
-                        )
-                        if flight_id:
-                            self.flight_id_var.set(flight_id)
-                    # Only start logging if we have a Flight ID
-                    if self.flight_id_var.get():
-                        self.start_logging()
                 
                 # Check if dashboard tab is visible and start data collection
                 if self.notebook.tab(self.notebook.select(), "text") == "Dashboard":
@@ -305,9 +288,7 @@ class ROBD2GUI:
             
             # Disable features
             self.start_calibration_btn.configure(state=tk.DISABLED)
-            self.start_performance_btn.configure(state=tk.DISABLED)
             self.start_logging_btn.configure(state=tk.DISABLED)
-            self.export_btn.configure(state=tk.DISABLED)
             
             # Update status
             self.status_bar.configure(text="Disconnected")
@@ -341,8 +322,8 @@ class ROBD2GUI:
         except Exception as e:
             log.error(f"Error polling response: {e}")
             
-        # Schedule the next poll and store the after ID
-        self.poll_after_id = self.root.after(100, self.poll_responses)
+        # Schedule the next poll and store the after ID (reduced frequency to 500ms)
+        self.poll_after_id = self.root.after(500, self.poll_responses)
         
     def start_calibration(self):
         """Start O2 sensor calibration"""
@@ -371,79 +352,7 @@ class ROBD2GUI:
         
         threading.Thread(target=run_calibration, daemon=True).start()
         
-    def start_performance_monitoring(self):
-        """Start performance monitoring"""
-        if not self.serial_comm.is_connected:
-            messagebox.showerror("Error", "Not connected to device")
-            return
-            
-        device_id = self.perf_device_var.get()
-        if not device_id:
-            messagebox.showerror("Error", "Please select a device")
-            return
-        
-        try:
-            # Disable/enable appropriate buttons
-            self.start_performance_btn.configure(state=tk.DISABLED)
-            self.stop_performance_btn.configure(state=tk.NORMAL)
-            self.export_btn.configure(state=tk.DISABLED)  # Disable export while monitoring
-            
-            # Clear existing data
-            self.data_store.clear()
-            self.plotting_active = True
-                
-            # Run monitoring in a separate thread
-            def run_monitoring():
-                try:
-                    self.performance_monitor = PerformanceMonitor(self.serial_comm.serial_port)
-                    self.performance_monitor.device_id = device_id
-                    
-                    # Override the data processing to update our data store
-                    def process_data(data):
-                        try:
-                            timestamp = datetime.now()
-                            self.data_store.add_data(timestamp, {
-                                'altitude': data.get('altitude', 0),
-                                'o2_conc': data.get('o2_conc', 0),
-                                'blp': data.get('blp', 0),
-                                'spo2': data.get('spo2', 0),
-                                'pulse': data.get('pulse', 0),
-                                'o2_voltage': data.get('o2_voltage', 0),
-                                'error_percent': data.get('error_percent', 0)
-                            })
-                        except Exception as e:
-                            log.error(f"Error processing data: {e}", exc_info=True)
-                    
-                    self.performance_monitor.process_data = process_data
-                    
-                    # This is a blocking call, but it's in a separate thread
-                    self.performance_monitor.start_monitoring()
-                    
-                except Exception as e:
-                    log.error(f"Error in monitoring thread: {e}", exc_info=True)
-                    self.root.after(0, lambda: messagebox.showerror("Error", f"Monitoring error: {str(e)}"))
-            
-            threading.Thread(target=run_monitoring, daemon=True).start()
-            
-        except Exception as e:
-            log.error(f"Error starting monitoring: {e}", exc_info=True)
-            messagebox.showerror("Error", f"Failed to start monitoring: {str(e)}")
-            self.start_performance_btn.configure(state=tk.NORMAL)
-            self.stop_performance_btn.configure(state=tk.DISABLED)
-            self.export_btn.configure(state=tk.NORMAL)
-            
-    def stop_performance_monitoring(self):
-        """Stop performance monitoring"""
-        if hasattr(self, 'performance_monitor'):
-            try:
-                self.performance_monitor.stop_monitoring()
-                self.start_performance_btn.configure(state=tk.NORMAL)
-                self.stop_performance_btn.configure(state=tk.DISABLED)
-                self.export_btn.configure(state=tk.NORMAL)  # Enable export after stopping
-                self.plotting_active = False
-            except Exception as e:
-                log.error(f"Error stopping monitoring: {e}", exc_info=True)
-                messagebox.showerror("Error", f"Failed to stop monitoring: {str(e)}")
+
                 
     def start_logging(self):
         """Start flight data logging"""
@@ -1256,13 +1165,29 @@ Before starting calibration:
                 
                 try:
                     # Get O2 concentration
-                    response = self.serial_comm.send_command("GET RUN O2CONC")
-                    o2_conc = float(response.strip())
+                    success, _ = self.serial_comm.send_command("GET RUN O2CONC")
+                    if not success:
+                        raise Exception("Failed to send O2CONC command")
+                    
+                    time.sleep(0.1)  # Wait for response
+                    o2_response = self.serial_comm.get_response()
+                    if not o2_response:
+                        raise Exception("No O2 concentration response")
+                    
+                    o2_conc = float(o2_response.strip())
                     o2_values.append(o2_conc)
                     
                     # Get ADC voltage
-                    response = self.serial_comm.send_command("GET ADC 12")
-                    voltage = float(response.strip())
+                    success, _ = self.serial_comm.send_command("GET ADC 12")
+                    if not success:
+                        raise Exception("Failed to send ADC command")
+                    
+                    time.sleep(0.1)  # Wait for response
+                    voltage_response = self.serial_comm.get_response()
+                    if not voltage_response:
+                        raise Exception("No ADC voltage response")
+                    
+                    voltage = float(voltage_response.strip())
                     voltage_values.append(voltage)
                     
                     # Add sample data with timestamp
@@ -1347,13 +1272,29 @@ Before starting calibration:
                 
                 try:
                     # Get O2 concentration
-                    response = self.serial_comm.send_command("GET RUN O2CONC")
-                    o2_conc = float(response.strip())
+                    success, _ = self.serial_comm.send_command("GET RUN O2CONC")
+                    if not success:
+                        raise Exception("Failed to send O2CONC command")
+                    
+                    time.sleep(0.1)  # Wait for response
+                    o2_response = self.serial_comm.get_response()
+                    if not o2_response:
+                        raise Exception("No O2 concentration response")
+                    
+                    o2_conc = float(o2_response.strip())
                     o2_values.append(o2_conc)
                     
                     # Get ADC voltage
-                    response = self.serial_comm.send_command("GET ADC 12")
-                    voltage = float(response.strip())
+                    success, _ = self.serial_comm.send_command("GET ADC 12")
+                    if not success:
+                        raise Exception("Failed to send ADC command")
+                    
+                    time.sleep(0.1)  # Wait for response
+                    voltage_response = self.serial_comm.get_response()
+                    if not voltage_response:
+                        raise Exception("No ADC voltage response")
+                    
+                    voltage = float(voltage_response.strip())
                     voltage_values.append(voltage)
                     
                     # Add sample data with timestamp
@@ -1443,7 +1384,16 @@ Before starting calibration:
             log_file = logs_dir / f"ROBD2_{device_id}_{timestamp}_cal.csv"
             
             # Get device info
-            device_info = self.serial_comm.send_command("GET INFO")
+            device_info = "Unknown Device"
+            try:
+                success, _ = self.serial_comm.send_command("GET INFO")
+                if success:
+                    time.sleep(0.1)  # Wait for response
+                    info_response = self.serial_comm.get_response()
+                    if info_response:
+                        device_info = info_response.strip()
+            except Exception as e:
+                log.warning(f"Could not get device info: {e}")
             
             # Update progress
             self.calibration_progress['value'] = 50
@@ -1901,16 +1851,40 @@ Do you want to proceed with recording calibration data?
             
         try:
             # Send the command
-            response = self.serial_comm.send_command(command)
+            success, message = self.serial_comm.send_command(command)
             
-            # Display command and response
+            # Display command
             timestamp = datetime.now().strftime("%H:%M:%S")
             self.training_response_text.insert(tk.END, f"[{timestamp}] >> {command}\n")
-            self.training_response_text.insert(tk.END, f"[{timestamp}] << {response}\n\n")
-            self.training_response_text.see(tk.END)
+            
+            if not success:
+                self.training_response_text.insert(tk.END, f"[{timestamp}] Error: {message}\n\n")
+                self.training_response_text.see(tk.END)
+                return
+            
+            # Wait for and get response
+            def get_response():
+                try:
+                    response = self.serial_comm.get_response()
+                    if response:
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        self.training_response_text.insert(tk.END, f"[{timestamp}] << {response}\n\n")
+                    else:
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        self.training_response_text.insert(tk.END, f"[{timestamp}] << (no response)\n\n")
+                    self.training_response_text.see(tk.END)
+                except Exception as e:
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    self.training_response_text.insert(tk.END, f"[{timestamp}] Error getting response: {str(e)}\n\n")
+                    self.training_response_text.see(tk.END)
+            
+            # Schedule response check after a short delay
+            self.root.after(100, get_response)
             
         except Exception as e:
-            self.training_response_text.insert(tk.END, f"Error: {str(e)}\n")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.training_response_text.insert(tk.END, f"[{timestamp}] Error: {str(e)}\n\n")
+            self.training_response_text.see(tk.END)
             
     def set_flsim_altitude(self):
         """Set flight simulator altitude"""
@@ -1940,7 +1914,7 @@ Do you want to proceed with recording calibration data?
         ttk.Entry(scale_frame, textvariable=self.time_scale_var, width=10).pack(side=tk.LEFT, padx=5)
         
         # Data collection control
-        control_frame = ModernLabelFrame(dashboard_frame, text="Plot Controls", padding=10)
+        control_frame = ModernLabelFrame(dashboard_frame, text="Plot Controls (0.2Hz - every 5 seconds)", padding=10)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
         
         start_btn = ModernButton(
@@ -1958,6 +1932,14 @@ Do you want to proceed with recording calibration data?
             width=15
         )
         stop_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Performance info
+        info_label = ttk.Label(
+            control_frame,
+            text="Note: Data collection optimized for device performance",
+            font=('Helvetica', 9, 'italic')
+        )
+        info_label.pack(side=tk.LEFT, padx=10)
         
         # Create plots
         plot_frame = ModernLabelFrame(dashboard_frame, text="Real-time Data", padding=10)
@@ -2004,7 +1986,7 @@ Do you want to proceed with recording calibration data?
         return dashboard_frame
         
     def start_data_collection(self):
-        """Start collecting data at 1Hz for plots"""
+        """Start collecting data at 0.2Hz (every 5 seconds) for visualization only"""
         if not self.serial_comm.is_connected:
             messagebox.showerror("Error", "Please connect to the device first")
             return
@@ -2013,7 +1995,7 @@ Do you want to proceed with recording calibration data?
         self.data_store.clear()
         self.plotting_active = True
         
-        # Start data collection
+        # Start data collection for plots only (not saved to file)
         self.collect_data_for_plots()
         
     def stop_data_collection(self):
@@ -2021,15 +2003,38 @@ Do you want to proceed with recording calibration data?
         self.plotting_active = False
 
     def collect_data_for_plots(self):
-        """Collect data at 1Hz for plotting"""
+        """Collect data at 0.2Hz (every 5 seconds) for plotting"""
         if not self.serial_comm.is_connected or not self.plotting_active:
             # Schedule next data collection
-            self.root.after(1000, self.collect_data_for_plots)
+            self.root.after(5000, self.collect_data_for_plots)
             return
             
         try:
-            # Get current data from the device
-            response = self.serial_comm.send_command("GET RUN ALL")
+            # Send command to get current data from the device
+            success, message = self.serial_comm.send_command("GET RUN ALL")
+            if not success:
+                log.warning(f"Failed to send command: {message}")
+                # Schedule next data collection
+                self.root.after(5000, self.collect_data_for_plots)
+                return
+            
+            # Wait a moment for response, then get it
+            self.root.after(200, self._process_data_response)
+            
+        except Exception as e:
+            log.error(f"Error collecting data: {e}")
+        
+        # Schedule next data collection (0.2Hz - every 5 seconds)
+        self.root.after(5000, self.collect_data_for_plots)
+        
+    def _process_data_response(self):
+        """Process the response from the data collection command"""
+        try:
+            # Get the response
+            response = self.serial_comm.get_response()
+            if not response:
+                return
+                
             data = response.strip().split(',')
             
             # Parse the data if valid
@@ -2037,44 +2042,42 @@ Do you want to proceed with recording calibration data?
                 # Format: timestamp, program, current_alt, final_alt, o2_conc, bl_pressure, elapsed_time, remaining_time, spo2, pulse
                 timestamp = datetime.now()
                 
-                # Get additional data for O2 voltage
+                # Skip additional O2 voltage request to reduce device load
                 o2_voltage = 0.0
-                try:
-                    o2_voltage_response = self.serial_comm.send_command("GET ADC 1")
-                    o2_voltage = float(o2_voltage_response.strip())
-                except:
-                    pass
                 
-                # Process the data
-                try:
-                    altitude = float(data[2])
-                    o2_conc = float(data[4])
-                    blp = float(data[5])
-                    spo2 = float(data[8])
-                    pulse = float(data[9])
-                    
-                    # Add data to data store
-                    self.data_store.add_data(timestamp, {
-                        'altitude': altitude,
-                        'o2_conc': o2_conc,
-                        'blp': blp,
-                        'spo2': spo2,
-                        'pulse': pulse,
-                        'o2_voltage': o2_voltage,
-                        'error_percent': 0.0  # Calculate if needed
-                    })
-                    
-                    # Trigger plot update
-                    self.update_plots()
-                    
-                except Exception as e:
-                    log.error(f"Error processing data: {e}")
-                    
+                # Process the data without additional requests
+                self._process_parsed_data(timestamp, data, o2_voltage)
+                
         except Exception as e:
-            log.error(f"Error collecting data: {e}")
+            log.error(f"Error processing data response: {e}")
+            
+
         
-        # Schedule next data collection (1Hz)
-        self.root.after(1000, self.collect_data_for_plots)
+    def _process_parsed_data(self, timestamp, data, o2_voltage):
+        """Process the parsed data and update plots"""
+        try:
+            altitude = float(data[2])
+            o2_conc = float(data[4])
+            blp = float(data[5])
+            spo2 = float(data[8])
+            pulse = float(data[9])
+            
+            # Add data to data store
+            self.data_store.add_data(timestamp, {
+                'altitude': altitude,
+                'o2_conc': o2_conc,
+                'blp': blp,
+                'spo2': spo2,
+                'pulse': pulse,
+                'o2_voltage': o2_voltage,
+                'error_percent': 0.0  # Calculate if needed
+            })
+            
+            # Trigger plot update
+            self.update_plots()
+            
+        except Exception as e:
+            log.error(f"Error processing parsed data: {e}")
 
     def create_diagnostics_tab(self):
         """Create the diagnostics tab with command buttons"""
