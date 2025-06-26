@@ -22,23 +22,48 @@ from program_manager import ProgramManager
 from performance_gui import PerformanceTab
 from gas_calculator_tab import GasCalculatorTab
 
-# Configure standard logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# Create logs directory if it doesn't exist
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
+
+# Configure comprehensive logging with both file and console handlers
+def setup_logging():
+    """Setup logging with both file and console handlers"""
+    # Create file handler for debug logs with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_handler = logging.FileHandler(logs_dir / f"robd2_gui_{timestamp}.log")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+    
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)  # Show INFO and above in console
+    console_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        handlers=[file_handler, console_handler]
+    )
+    
+    return file_handler
+
+# Setup logging and get file handler reference
+debug_file_handler = setup_logging()
 log = logging.getLogger("robd2_gui")
 
-# Ensure log messages also appear in the terminal in real time
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-console_handler.setFormatter(logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-))
-if not any(isinstance(h, logging.StreamHandler) for h in log.handlers):
-    log.addHandler(console_handler)
+# Log application startup
+log.info("ROBD2 GUI Application starting up")
+log.info(f"Debug logs will be saved to: {logs_dir}")
+log.debug("Debug logging enabled - all debug messages will be saved to file")
 
 class ROBD2GUI:
     def __init__(self, root):
@@ -2280,6 +2305,11 @@ def main():
                 for thread in threading.enumerate():
                     if thread != threading.current_thread() and thread.daemon:
                         thread.join(timeout=1.0)
+                
+                # Close debug log file properly
+                if 'debug_file_handler' in globals():
+                    debug_file_handler.close()
+                    log.info("ROBD2 GUI Application shutting down - debug log file closed")
                 
             except Exception as e:
                 log.error(f"Error during cleanup: {e}")
