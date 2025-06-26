@@ -1004,6 +1004,10 @@ For more information, please refer to the ROBD2 Technical Manual.
         left_frame = ModernFrame(main_paned)
         main_paned.add(left_frame, weight=2)
         
+        # Right side - Calibration results
+        right_frame = ModernFrame(main_paned)
+        main_paned.add(right_frame, weight=1)
+        
         # Create scrollable frame for left side
         canvas, scrollable_frame = self.create_scrollable_frame(left_frame)
         
@@ -1142,8 +1146,8 @@ Before starting calibration:
         )
         self.start_calibration_btn.pack(pady=5)
         
-        # Results display
-        results_frame = ModernLabelFrame(scrollable_frame, text="Calibration Results", padding=10)
+        # Results display (moved to right_frame)
+        results_frame = ModernLabelFrame(right_frame, text="Calibration Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # Add scrollbar to results text
@@ -1962,11 +1966,8 @@ Do you want to proceed with recording calibration data?
         self.pulse_line, = self.vitals_ax.plot([], [], 'c-', label='Pulse')
         
         # Configure plots
-        self.altitude_ax.set_title('Altitude (ft)')
         self.altitude_ax.set_ylabel('Altitude (ft)')
-        self.o2_ax.set_title('O2 Concentration (%)')
         self.o2_ax.set_ylabel('O2 (%)')
-        self.vitals_ax.set_title('Vitals')
         self.vitals_ax.set_ylabel('Value')
         self.vitals_ax.set_xlabel('Time (s)')
         
