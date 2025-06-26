@@ -30,6 +30,16 @@ logging.basicConfig(
 )
 log = logging.getLogger("robd2_gui")
 
+# Ensure log messages also appear in the terminal in real time
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+))
+if not any(isinstance(h, logging.StreamHandler) for h in log.handlers):
+    log.addHandler(console_handler)
+
 class ROBD2GUI:
     def __init__(self, root):
         """Initialize the GUI"""
@@ -2226,8 +2236,17 @@ def main():
         
         def on_closing():
             try:
+                # Stop any ongoing monitoring or data collection
+                app.plotting_active = False
+                if hasattr(app, 'performance_monitor'):
+                    app.performance_monitor.stop_monitoring()
+                
+                # Stop any ongoing logging
+                if hasattr(app, 'data_logger'):
+                    app.data_logger.stop_logging()
+                
                 # Cancel any pending after events
-                if app.poll_after_id:
+                if hasattr(app, 'poll_after_id'):
                     root.after_cancel(app.poll_after_id)
                 
                 # Clean up scrolling
@@ -2237,10 +2256,17 @@ def main():
                 if app.serial_comm.is_connected:
                     app.disconnect_device()
                     
+                # Wait for any remaining threads to finish
+                for thread in threading.enumerate():
+                    if thread != threading.current_thread() and thread.daemon:
+                        thread.join(timeout=1.0)
+                
             except Exception as e:
                 log.error(f"Error during cleanup: {e}")
             finally:
+                root.quit()
                 root.destroy()
+                sys.exit(0)  # Ensure complete exit
         
         root.protocol("WM_DELETE_WINDOW", on_closing)
         root.mainloop()
