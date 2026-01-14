@@ -4,6 +4,7 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
@@ -896,10 +897,21 @@ For more information, please refer to the ROBD2 Technical Manual.
         self.port_combo = ttk.Combobox(port_frame, textvariable=self.port_var)
         self.port_combo.pack(side=tk.LEFT, padx=5)
         
-        self.connect_btn = ModernButton(port_frame, text="Connect", command=self.connect_to_device)
+        self.connect_btn = ModernButton(
+            port_frame,
+            text="Connect",
+            command=self.connect_to_device,
+            variant="primary",
+        )
         self.connect_btn.pack(side=tk.LEFT, padx=5)
         
-        self.disconnect_btn = ModernButton(port_frame, text="Disconnect", command=self.disconnect_device, state=tk.DISABLED)
+        self.disconnect_btn = ModernButton(
+            port_frame,
+            text="Disconnect",
+            command=self.disconnect_device,
+            state=tk.DISABLED,
+            variant="danger",
+        )
         self.disconnect_btn.pack(side=tk.LEFT, padx=5)
         
         self.refresh_btn = ModernButton(port_frame, text="Refresh", command=self.refresh_ports)
@@ -1034,10 +1046,11 @@ Before starting calibration:
         ttk.Label(room_air_frame, textvariable=self.room_air_o2_var).grid(row=1, column=1, padx=5, pady=2, sticky="w")
         
         self.record_room_air_btn = ModernButton(
-            room_air_frame, 
-            text="Record Room Air", 
+            room_air_frame,
+            text="Record Room Air",
             command=self.record_room_air_calibration,
-            width=18
+            width=18,
+            variant="primary",
         )
         self.record_room_air_btn.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
         
@@ -1054,10 +1067,11 @@ Before starting calibration:
         ttk.Label(pure_o2_frame, textvariable=self.pure_o2_o2_var).grid(row=1, column=1, padx=5, pady=2, sticky="w")
         
         self.record_pure_o2_btn = ModernButton(
-            pure_o2_frame, 
-            text="Record 100% O2", 
+            pure_o2_frame,
+            text="Record 100% O2",
             command=self.record_pure_o2_calibration,
-            width=18
+            width=18,
+            variant="primary",
         )
         self.record_pure_o2_btn.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
         
@@ -1067,11 +1081,12 @@ Before starting calibration:
         
         # Save calibration button
         self.save_calibration_btn = ModernButton(
-            control_frame, 
-            text="Save Calibration Values", 
+            control_frame,
+            text="Save Calibration Values",
             command=self.save_calibration_values,
             width=22,
-            state=tk.DISABLED
+            state=tk.DISABLED,
+            variant="primary",
         )
         self.save_calibration_btn.pack(side=tk.LEFT, padx=5)
         
@@ -1089,10 +1104,11 @@ Before starting calibration:
         manual_cal_frame.pack(fill=tk.X, padx=10, pady=5)
         
         self.start_calibration_btn = ModernButton(
-            manual_cal_frame, 
-            text="Record Full Calibration Sequence", 
-            command=self.start_calibration_recording, 
-            state=tk.DISABLED
+            manual_cal_frame,
+            text="Record Full Calibration Sequence",
+            command=self.start_calibration_recording,
+            state=tk.DISABLED,
+            variant="primary",
         )
         self.start_calibration_btn.pack(pady=5)
         
@@ -1162,6 +1178,24 @@ Before starting calibration:
             self.calibration_progress.config(mode='determinate')
             self.calibration_progress.stop()
             self.calibration_progress['value'] = 0 if in_progress is False else 100
+
+    def _parse_float_response(self, response: Optional[str], label: str) -> float:
+        """Parse device response text into a float with validation.
+
+        Raises:
+            ValueError: if the response is missing, an error code, or not numeric.
+        """
+        if response is None:
+            raise ValueError(f"No {label} response")
+        value_str = response.strip()
+        if not value_str:
+            raise ValueError(f"No {label} response")
+        if value_str.upper().startswith("ERR"):
+            raise ValueError(f"{label} returned error code: {value_str}")
+        try:
+            return float(value_str)
+        except ValueError as exc:
+            raise ValueError(f"Invalid {label} value: {value_str}") from exc
         
     def record_room_air_calibration(self):
         """Record room air (21% O2) calibration values"""
@@ -1196,10 +1230,7 @@ Before starting calibration:
                     
                     time.sleep(0.1)  # Wait for response
                     o2_response = self.serial_comm.get_response()
-                    if not o2_response:
-                        raise Exception("No O2 concentration response")
-                    
-                    o2_conc = float(o2_response.strip())
+                    o2_conc = self._parse_float_response(o2_response, "O2 concentration")
                     o2_values.append(o2_conc)
                     
                     # Get ADC voltage
@@ -1209,10 +1240,7 @@ Before starting calibration:
                     
                     time.sleep(0.1)  # Wait for response
                     voltage_response = self.serial_comm.get_response()
-                    if not voltage_response:
-                        raise Exception("No ADC voltage response")
-                    
-                    voltage = float(voltage_response.strip())
+                    voltage = self._parse_float_response(voltage_response, "ADC voltage")
                     voltage_values.append(voltage)
                     
                     # Add sample data with timestamp
@@ -1915,7 +1943,8 @@ Do you want to proceed with recording calibration data?
             control_frame,
             text="Start Plotting",
             command=self.start_data_collection,
-            width=15
+            width=15,
+            variant="primary",
         )
         start_btn.pack(side=tk.LEFT, padx=5)
         
@@ -1923,7 +1952,8 @@ Do you want to proceed with recording calibration data?
             control_frame,
             text="Stop Plotting",
             command=self.stop_data_collection,
-            width=15
+            width=15,
+            variant="danger",
         )
         stop_btn.pack(side=tk.LEFT, padx=5)
         
@@ -2166,7 +2196,12 @@ Do you want to proceed with recording calibration data?
         command_entry = ttk.Entry(custom_frame, textvariable=self.command_var)
         command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
-        send_btn = ModernButton(custom_frame, text="Send", command=lambda: self.send_diagnostic_command(self.command_var.get()))
+        send_btn = ModernButton(
+            custom_frame,
+            text="Send",
+            command=lambda: self.send_diagnostic_command(self.command_var.get()),
+            variant="primary",
+        )
         send_btn.pack(side=tk.LEFT, padx=5)
         
         # Response display
@@ -2214,10 +2249,22 @@ Do you want to proceed with recording calibration data?
         control_frame = ModernLabelFrame(logging_frame, text="Logging Controls", padding=10)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        self.start_logging_btn = ModernButton(control_frame, text="Start Logging", command=self.start_logging, state=tk.DISABLED)
+        self.start_logging_btn = ModernButton(
+            control_frame,
+            text="Start Logging",
+            command=self.start_logging,
+            state=tk.DISABLED,
+            variant="primary",
+        )
         self.start_logging_btn.pack(side=tk.LEFT, padx=5)
         
-        self.stop_logging_btn = ModernButton(control_frame, text="Stop Logging", command=self.stop_logging, state=tk.DISABLED)
+        self.stop_logging_btn = ModernButton(
+            control_frame,
+            text="Stop Logging",
+            command=self.stop_logging,
+            state=tk.DISABLED,
+            variant="danger",
+        )
         self.stop_logging_btn.pack(side=tk.LEFT, padx=5)
         
         # Log display
