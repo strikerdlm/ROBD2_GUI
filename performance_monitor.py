@@ -143,6 +143,89 @@ class PerformanceMonitor:
             'completed': False
         } for alt in O2_SPECS}
 
+    def _safe_float(self, value: Optional[str], label: str) -> Optional[float]:
+        """Convert a string to float; return None on errors or error codes."""
+        if value is None:
+            log.error(f"{label} response is missing")
+            return None
+        stripped = value.strip()
+        if not stripped:
+            log.error(f"{label} response is empty")
+            return None
+        if stripped.upper().startswith("ERR"):
+            log.error(f"{label} returned error code: {stripped}")
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            log.error(f"Could not parse {label}: {stripped}")
+            return None
+
+    def _is_single_float_response(self, response: Optional[str]) -> bool:
+        """
+        Check that a response line looks like a single floating‑point value
+        (no commas or multiple tokens). Used to discard stray RUN ALL lines.
+        """
+        if response is None:
+            return False
+        stripped = response.strip()
+        if not stripped or "," in stripped:
+            return False
+        try:
+            float(stripped)
+            return True
+        except ValueError:
+            return False
+
+    def _read_adc(self, channel: str) -> Optional[float]:
+        """Read ADC channel value safely with validation and bounded retries."""
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            self.ser.reset_input_buffer()
+            time.sleep(0.05)
+            self.ser.write(f"GET ADC {channel}\r\n".encode('utf-8'))
+            attempt_deadline = time.time() + 1.6
+            attempt_deadline = time.time() + 1.2
+            while time.time() < attempt_deadline:
+                response = self._read_line_with_timeout(
+                    timeout=1.0,
+                    label=f"ADC {channel}",
+                    suppress_timeout_log=True
+                )
+                if response is None:
+                    continue
+                if not self._is_single_float_response(response):
+                    log.debug(f"Discarding non-ADC line for channel {channel}: {response}")
+                    continue
+                value = self._safe_float(response, f"ADC {channel}")
+                if value is not None:
+                    return value
+
+            if attempt < max_attempts - 1:
+                log.warning(
+                    f"Retrying ADC {channel} (attempt {attempt + 2} of {max_attempts}) "
+                    "after no valid response"
+                )
+
+        log.error(f"Failed to read ADC {channel} after {max_attempts} attempts")
+        return None
+
+    def _read_line_with_timeout(
+        self,
+        timeout: float = 0.7,
+        label: str = "response",
+        suppress_timeout_log: bool = False
+    ) -> Optional[str]:
+        """Read a single line from serial within a timeout window."""
+        start = time.time()
+        while (time.time() - start) < timeout:
+            if self.ser.in_waiting:
+                return self.ser.readline().decode('utf-8').rstrip()
+            time.sleep(0.02)
+        if not suppress_timeout_log:
+            log.error(f"No {label} received within {timeout}s")
+        return None
+
     def calculate_statistics(self, o2_readings: List[float], spec: AltitudeSpec) -> Dict:
         """Calculate comprehensive statistics for O2 readings"""
         try:
@@ -180,58 +263,56 @@ class PerformanceMonitor:
             log.error(f"Error calculating statistics: {e}")
             return None
 
-    def _get_o2_data(self) -> Dict:
+    def _get_o2_data(self) -> Optional[Dict]:
         """Get O2 concentration and sensor voltages"""
         try:
             self.ser.reset_input_buffer()
             self.ser.write("GET RUN ALL\r\n".encode('utf-8'))
-            time.sleep(0.2)
+            data = self._read_line_with_timeout(timeout=1.5, label="RUN ALL")
+            if not data:
+                return None
+
+            parsed_data = self._parse_run_all_data(data)
+            if not parsed_data:
+                return None
             
-            if self.ser.in_waiting:
-                data = self.ser.readline().decode('utf-8').rstrip()
-                parsed_data = self._parse_run_all_data(data)
-                if not parsed_data:
-                    return None
-                
-                # Get voltage readings
-                self.ser.reset_input_buffer()
-                time.sleep(0.1)
-                
-                self.ser.write("GET ADC 1\r\n".encode('utf-8'))
-                time.sleep(0.2)
-                voltage1 = float(self.ser.readline().decode('utf-8').strip()) if self.ser.in_waiting else None
-                
-                self.ser.reset_input_buffer()
-                time.sleep(0.1)
-                self.ser.write("GET ADC 12\r\n".encode('utf-8'))
-                time.sleep(0.2)
-                voltage12 = float(self.ser.readline().decode('utf-8').strip()) if self.ser.in_waiting else None
-                
-                if voltage1 is None or voltage12 is None:
-                    return None
-                
-                return {
-                    "o2_conc": float(parsed_data["o2_conc"]),
-                    "altitude": int(float(parsed_data["current_alt"])),
-                    "voltage1": voltage1,
-                    "voltage12": voltage12,
-                    "blp": float(parsed_data["bl_pressure"]),
-                    "timestamp": parsed_data["timestamp"],
-                    "program": parsed_data["program"],
-                    "final_alt": parsed_data["final_alt"],
-                    "elapsed_time": parsed_data["elapsed_time"],
-                    "remaining_time": parsed_data["remaining_time"]
-                }
-                
+            voltage1 = self._read_adc("1")
+            voltage12 = self._read_adc("12")
+            if voltage1 is None or voltage12 is None:
+                return None
+
+            o2_conc = self._safe_float(parsed_data["o2_conc"], "O2 concentration")
+            altitude_val = self._safe_float(parsed_data["current_alt"], "Altitude")
+            blp_val = self._safe_float(parsed_data["bl_pressure"], "BL pressure")
+
+            if o2_conc is None or altitude_val is None or blp_val is None:
+                return None
+
+            return {
+                "o2_conc": o2_conc,
+                "altitude": int(altitude_val),
+                "voltage1": voltage1,
+                "voltage12": voltage12,
+                "blp": blp_val,
+                "timestamp": parsed_data["timestamp"],
+                "program": parsed_data["program"],
+                "final_alt": parsed_data["final_alt"],
+                "elapsed_time": parsed_data["elapsed_time"],
+                "remaining_time": parsed_data["remaining_time"]
+            }
+            
         except Exception as e:
             log.error(f"Error getting O2 data: {e}")
             return None
 
-    def _parse_run_all_data(self, data: str) -> Dict:
+    def _parse_run_all_data(self, data: str) -> Optional[Dict]:
         """Parse the GET RUN ALL response"""
         try:
             parts = data.split(',')
             if len(parts) != 10:
+                return None
+            if any(p.strip().upper().startswith("ERR") for p in parts):
+                log.error(f"RUN ALL response contained error code: {data}")
                 return None
             
             return {
@@ -362,7 +443,7 @@ class PerformanceMonitor:
                         })
                         self.data_callback(enhanced_data)
                 
-                time.sleep(0.2)  # 5Hz data collection
+                time.sleep(0.5)  # Slow to 2Hz to reduce command errors
                 
             except Exception as e:
                 log.error(f"Error in monitoring loop: {e}")
