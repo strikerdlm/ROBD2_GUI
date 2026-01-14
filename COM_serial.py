@@ -983,7 +983,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='ROBD2 Command Interface')
-    parser.add_argument('--port', default='COM12', help='COM port to read from')
+    parser.add_argument('--port', default='COM8', help='COM port to read from')
     parser.add_argument('--baudrate', type=int, default=9600, help='Baudrate')
     parser.add_argument('--timeout', type=float, default=1, help='Timeout in seconds')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
