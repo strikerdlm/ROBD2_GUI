@@ -65,7 +65,26 @@ matplotlib>=3.7.0
 numpy>=1.24.0
 ```
 
-## Installation
+## Web Frontend (New!)
+
+A modern TypeScript frontend is available in the `frontend/` directory, featuring:
+- Publication-quality ECharts visualizations
+- Real-time monitoring dashboard
+- Gas calculators with scientific accuracy
+- Performance analytics
+- Bilingual support (EN/ES)
+
+### Running the Web Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
+
+## Python GUI Installation
 
 1. Clone the repository:
    ```bash
