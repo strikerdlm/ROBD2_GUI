@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-02-03
+
+### Added
+- **TypeScript Frontend** - Modern React + TypeScript web application
+  - Publication-quality ECharts visualizations designed for Q1 science journal submissions
+  - Glass-morphism UI design with Tailwind CSS
+  - Framer Motion animations for smooth interactions
+  - Bilingual support (English/Spanish) with i18next
+
+### Dashboard Features
+- Real-time altitude profile with warning/critical zone markers
+- SpO₂ gauge chart with clinical thresholds
+- Multi-parameter time series charts (O₂, BLP, SpO₂, Pulse)
+- Interactive data zoom and pan capabilities
+- CSV data export functionality
+
+### Gas Calculators
+- Physiological parameters calculator (PAO₂, SaO₂, ventilation, heart rate)
+- Training gas consumption estimator
+- Cylinder capacity calculator
+- Single session cost calculator
+- Altitude-physiology curve visualization
+
+### Performance Analytics
+- Statistical distribution histograms
+- Box plot analysis
+- Coefficient of variation metrics
+- Quality assessment indicators
+
+### Scientific References
+All calculations verified against peer-reviewed literature:
+- West JB. Respiratory Physiology: The Essentials. 10th ed. Wolters Kluwer; 2021.
+- FAA-H-8083-25B Pilot's Handbook of Aeronautical Knowledge, Chapter 17.
+- Severinghaus JW. J Appl Physiol. 1979;46(3):599-602.
+- Richalet JP. Presse Med. 2012;41(6):638-43.
+- Weil JV. Compr Physiol. 2012;2(2):1495-1550.
+
+### Technical Stack
+- React 19 with TypeScript
+- ECharts 6 for data visualization
+- Vite 7 for fast builds
+- Tailwind CSS 3 for styling
+
 ## [1.0.0] - 2024-03-19
 
 ### Added
